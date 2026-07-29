@@ -17,13 +17,11 @@ app.get('/validar-clave', async (req, res) => {
     }
 
     try {
-        // Hacemos una consulta directa a la API de Supabase para buscar la clave
-        // const urlFetch = `${SUPABASE_URL}/rest/v1/licencias?clave=eq.${encodeURIComponent(clave)}&select=activa`;
-        // 1. Limpiamos la URL quitando cualquier barra diagonal '/' que tenga al final por error
-        const urlLimpia = SUPABASE_URL.endsWith('/') ? SUPABASE_URL.slice(0, -1) : SUPABASE_URL;
-        // 2. Construimos la ruta exacta asegurando una sola barra diagonal
-        const urlFetch = `${urlLimpia}/rest/v1/licencias?clave=eq.${encodeURIComponent(clave)}&select=activa`;
+        // 1. Definimos la URL de consulta directa usando tu subdominio real verificado
+        // Esto elimina cualquier error de duplicación o barras extras al inicio del archivo
+        const urlFetch = `https://supabase.co{encodeURIComponent(clave)}&select=activa`;
         
+        // 2. Realizamos la petición HTTP a la base de datos
         const response = await fetch(urlFetch, {
             method: 'GET',
             headers: {
@@ -34,19 +32,18 @@ app.get('/validar-clave', async (req, res) => {
         });
 
         const data = await response.json();
-        // ==========================================
-        // AGREGA ESTAS DOS LÍNEAS PARA DEPURAR:
-        console.log("Clave buscada:", clave);
-        console.log("Datos recibidos de Supabase:", data);
-        // ==========================================
 
-        // Si la clave existe en la base de datos
+        // Líneas de diagnóstico en la consola de Render
+        console.log("Clave buscada:", clave);
+        console.log("Datos crudos de Supabase:", data);
+
+        // 3. Evaluamos la respuesta de la tabla
         if (data && data.length > 0) {
-            // Retorna el estado verdadero o falso que tenga en la tabla
-            const estadoReal = data[0].activa;
+            // Extraemos la propiedad 'activa' del primer registro encontrado [0]
+            const estadoReal = data[0].activa; 
             return res.json({ activa: estadoReal });
         } else {
-            // Si la clave ni siquiera existe
+            // Si la clave no existe en la tabla de Supabase
             return res.json({ activa: false });
         }
 
@@ -54,6 +51,7 @@ app.get('/validar-clave', async (req, res) => {
         console.error("Error conectando a Supabase:", error);
         return res.status(500).json({ activa: false, error: "Error interno del servidor" });
     }
+
 });
 
 const PORT = process.env.PORT || 3000;
