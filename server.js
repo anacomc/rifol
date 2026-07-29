@@ -17,20 +17,13 @@ app.get('/validar-clave', async (req, res) => {
     }
 
     try {
-        // 1. Creamos el objeto URL base apuntando de forma segura a tu tabla
-        const miUrl = new URL("https://supabase.co");
-        
-        // 2. Agregamos los parámetros uno por uno de forma limpia
-        miUrl.searchParams.append("clave", "eq." + clave);
-        miUrl.searchParams.append("select", "activa");
+        // 1. Construimos la URL uniendo tu subdominio real verificado paso a paso
+        const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa";
 
-        // Convertimos el objeto a texto limpio para la petición
-        const urlFetch = miUrl.toString();
-
-        // Línea de control para verificar en la consola cómo quedó armada la URL
+        // Imprime en la consola para confirmar que no se vuelva a recortar
         console.log("URL Final Enviada a Supabase:", urlFetch);
 
-        // 3. Realizamos la petición HTTP a Supabase
+        // 2. Realizamos la petición HTTP a la base de datos
         const response = await fetch(urlFetch, {
             method: 'GET',
             headers: {
@@ -40,6 +33,7 @@ app.get('/validar-clave', async (req, res) => {
             }
         });
 
+        // 3. Procesamos los datos recibidos
         const data = await response.json();
 
         console.log("Clave buscada:", clave);
@@ -47,10 +41,11 @@ app.get('/validar-clave', async (req, res) => {
 
         // 4. Evaluamos la respuesta de la tabla
         if (data && data.length > 0) {
-            // Extraemos la propiedad 'activa' del primer registro encontrado [0]
+            // Extraemos la propiedad 'activa' de la primera fila encontrada
             const estadoReal = data[0].activa; 
             return res.json({ activa: estadoReal });
         } else {
+            // Si la clave no existe en Supabase
             return res.json({ activa: false });
         }
 
@@ -58,6 +53,7 @@ app.get('/validar-clave', async (req, res) => {
         console.error("Error conectando a Supabase:", error);
         return res.status(500).json({ activa: false, error: "Error interno del servidor" });
     }
+
 
 });
 
