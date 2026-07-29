@@ -14,7 +14,9 @@ app.get('/validar-clave', async (req, res) => {
 
     try {
         // 1. Solicitamos los campos necesarios de la tabla licencias
-        const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa,bloqueada,vencimiento,consultas_diarias";
+        // const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa,bloqueada,vencimiento,consultas_diarias";
+        const urlBase = "https://supabase.co.";
+        const urlFetch = urlBase + encodeURIComponent(clave) + "&select=activa,bloqueada,vencimiento,consultas_diarias";
 
         const response = await fetch(urlFetch, {
             method: 'GET',
