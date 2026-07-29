@@ -19,7 +19,10 @@ app.get('/validar-clave', async (req, res) => {
         // Al estar en un archivo totalmente nuevo, Node.js leerá obligatoriamente esta línea:
         // const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa";
         // const urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=LICENCIA-1234";
-        const urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.LICENCIA-1234&select=activa";
+        // const urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.LICENCIA-1234&select=activa";
+        // Rompemos la URL en dos partes y le inyectamos la variable 'clave' en el medio
+        const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        const urlFetch = urlBase + encodeURIComponent(clave) + "&select=activa";
 
         console.log("--- ¡NUEVO ARCHIVO EN ACCIÓN! ---");
         console.log("URL CONSULTADA EN SUPABASE:", urlFetch);
