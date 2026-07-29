@@ -19,7 +19,8 @@ app.get('/validar-clave', async (req, res) => {
     try {
         // 1. Definimos la URL de consulta directa usando tu subdominio real verificado
         // Esto elimina cualquier error de duplicación o barras extras al inicio del archivo
-        const urlFetch = `https://supabase.co{encodeURIComponent(clave)}&select=activa`;
+        // const urlFetch = `https://supabase.co{encodeURIComponent(clave)}&select=activa`;
+        const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa";
         
         // 2. Realizamos la petición HTTP a la base de datos
         const response = await fetch(urlFetch, {
