@@ -6,9 +6,7 @@ app.use(express.json());
 // CONFIGURACIÓN DE SUPABASE
 // Reemplaza estos dos valores con los datos reales de tu panel de Supabase
 const SUPABASE_URL = "https://rfjeldbecbacfcgrkapi.supabase.co/rest/v1/";
-// const SUPABASE_KEY = "sb_publishable_tgD-6U5T0OWz_0dA6d6-Mw_evjNnr6D";
-const SUPABASE_KEY = "sb_secret_PC7OfOqtxDYJ3L_Yh6Yiuw_fRFw13BZ";
-// 
+const SUPABASE_KEY = "sb_publishable_tgD-6U5T0OWz_0dA6d6-Mw_evjNnr6D";
 
 // Ruta GET para validar la clave desde Visual FoxPro
 app.get('/validar-clave', async (req, res) => {
