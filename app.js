@@ -5,8 +5,8 @@ app.use(express.json());
 
 // Coloca aquí tu API KEY ANON LARGA de Supabase
 // const SUPABASE_KEY = "TU_API_KEY_ANON_LARGA_AQUÍ";
-const SUPABASE_URL = "https://rfjeldbecbacfcgrkapi.supabase.co/rest/v1/";
-const SUPABASE_KEY = "sb_publishable_tgD-6U5T0OWz_0dA6d6-Mw_evjNnr6D";
+const SUPABASE_URL = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/";
+const SUPABASE_KEY = "sb_publishable_lyN_KhNr7al-E2al0AJ-rQ__d0TfJE6";
 
 app.get('/validar-clave', async (req, res) => {
     const { clave } = req.query;
