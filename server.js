@@ -30,6 +30,11 @@ app.get('/validar-clave', async (req, res) => {
         });
 
         const data = await response.json();
+        // ==========================================
+        // AGREGA ESTAS DOS LÍNEAS PARA DEPURAR:
+        console.log("Clave buscada:", clave);
+        console.log("Datos recibidos de Supabase:", data);
+        // ==========================================
 
         // Si la clave existe en la base de datos
         if (data && data.length > 0) {
