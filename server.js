@@ -1,29 +1,52 @@
-const express = require('express'); // <-- ESTA LÍNEA FALTABA
-const app = express();              // <-- ESTA LÍNEA FALTABA
+const express = require('express');
+const app = express();
 
-app.use(express.json()); 
+app.use(express.json());
 
-// Simulación de Base de Datos de claves activas
-const clavesActivas = ["LICENCIA-1234", "ABCDE-56789", "FOXPRO-2026"];
+// CONFIGURACIÓN DE SUPABASE
+// Reemplaza estos dos valores con los datos reales de tu panel de Supabase
+const SUPABASE_URL = "https://rfjeldbecbacfcgrkapi.supabase.co/rest/v1/";
+const SUPABASE_KEY = "sb_publishable_tgD-6U5T0OWz_0dA6d6-Mw_evjNnr6D";
 
-// Ruta GET para validar la clave
-app.get('/validar-clave', (req, res) => {
+// Ruta GET para validar la clave desde Visual FoxPro
+app.get('/validar-clave', async (req, res) => {
     const { clave } = req.query;
 
     if (!clave) {
         return res.status(400).json({ activa: false, error: "Clave no proporcionada" });
     }
 
-    // Verificar si la clave está en nuestro registro
-    if (clavesActivas.includes(clave)) {
-        return res.json({ activa: true });
-    } else {
-        return res.json({ activa: false });
+    try {
+        // Hacemos una consulta directa a la API de Supabase para buscar la clave
+        const urlFetch = `${SUPABASE_URL}/rest/v1/licencias?clave=eq.${encodeURIComponent(clave)}&select=activa`;
+        
+        const response = await fetch(urlFetch, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        // Si la clave existe en la base de datos
+        if (data && data.length > 0) {
+            // Retorna el estado verdadero o falso que tenga en la tabla
+            return res.json({ activa: data[0].activa });
+        } else {
+            // Si la clave ni siquiera existe
+            return res.json({ activa: false });
+        }
+
+    } catch (error) {
+        console.error("Error conectando a Supabase:", error);
+        return res.status(500).json({ activa: false, error: "Error interno del servidor" });
     }
 });
 
-// Iniciar el servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`RIFOL Servidor corriendo en el puerto ${PORT}`);
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
 });
