@@ -15,12 +15,8 @@ app.get('/validar-clave', async (req, res) => {
         return res.status(400).json({ activa: false, error: "Clave no proporcionada" });
     }
 
-    try {
-        // Al estar en un archivo totalmente nuevo, Node.js leerá obligatoriamente esta línea:
-        // const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa";
-        // const urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=LICENCIA-1234";
-        // const urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.LICENCIA-1234&select=activa";
-        // Rompemos la URL en dos partes y le inyectamos la variable 'clave' en el medio
+        try {
+        // CONCATENACIÓN LIFALIBLE: Inyecta dinámicamente la clave que viene de FoxPro
         const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
         const urlFetch = urlBase + encodeURIComponent(clave) + "&select=activa";
 
@@ -38,13 +34,16 @@ app.get('/validar-clave', async (req, res) => {
 
         const data = await response.json();
 
-        console.log("Clave buscada:", clave);
+        console.log("Clave buscada desde VFP:", clave);
         console.log("Datos crudos de Supabase:", data);
 
+        // Evaluamos si Supabase encontró la clave recibida
         if (data && data.length > 0) {
+            // data[0].activa lee el valor verdadero/falso de la tabla
             const estadoReal = data[0].activa; 
             return res.json({ activa: estadoReal });
         } else {
+            // Si la clave enviada por VFP no existe en la base de datos
             return res.json({ activa: false });
         }
 
