@@ -1,0 +1,12 @@
+{
+  "name": "validador-claves-vfp",
+  "version": "1.0.0",
+  "description": "Servidor para validar licencias de Visual FoxPro",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
