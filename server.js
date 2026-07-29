@@ -17,34 +17,40 @@ app.get('/validar-clave', async (req, res) => {
     }
 
     try {
-        // 1. Definimos la URL de consulta directa usando tu subdominio real verificado
-        // Esto elimina cualquier error de duplicación o barras extras al inicio del archivo
-        // const urlFetch = `https://supabase.co{encodeURIComponent(clave)}&select=activa`;
-        const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa";
+        // 1. Creamos el objeto URL base apuntando de forma segura a tu tabla
+        const miUrl = new URL("https://supabase.co");
         
-        // 2. Realizamos la petición HTTP a la base de datos
+        // 2. Agregamos los parámetros uno por uno de forma limpia
+        miUrl.searchParams.append("clave", "eq." + clave);
+        miUrl.searchParams.append("select", "activa");
+
+        // Convertimos el objeto a texto limpio para la petición
+        const urlFetch = miUrl.toString();
+
+        // Línea de control para verificar en la consola cómo quedó armada la URL
+        console.log("URL Final Enviada a Supabase:", urlFetch);
+
+        // 3. Realizamos la petición HTTP a Supabase
         const response = await fetch(urlFetch, {
             method: 'GET',
             headers: {
                 'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Authorization': "Bearer " + SUPABASE_KEY,
                 'Content-Type': 'application/json'
             }
         });
 
         const data = await response.json();
 
-        // Líneas de diagnóstico en la consola de Render
         console.log("Clave buscada:", clave);
         console.log("Datos crudos de Supabase:", data);
 
-        // 3. Evaluamos la respuesta de la tabla
+        // 4. Evaluamos la respuesta de la tabla
         if (data && data.length > 0) {
             // Extraemos la propiedad 'activa' del primer registro encontrado [0]
             const estadoReal = data[0].activa; 
             return res.json({ activa: estadoReal });
         } else {
-            // Si la clave no existe en la tabla de Supabase
             return res.json({ activa: false });
         }
 
