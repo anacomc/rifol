@@ -34,7 +34,9 @@ app.get('/validar-clave', async (req, res) => {
         // Si la clave existe en la base de datos
         if (data && data.length > 0) {
             // Retorna el estado verdadero o falso que tenga en la tabla
-            return res.json({ activa: data[0].activa });
+            const estadoReal = data[0].activa;
+            // return res.json({ activa: data[0].activa });
+            return res.json({ activa: estadoReal });
         } else {
             // Si la clave ni siquiera existe
             return res.json({ activa: false });
