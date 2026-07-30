@@ -55,26 +55,29 @@ app.get('/validar-clave', async (req, res) => {
         // 4. CONTROL DE CONTADOR DE CONSULTAS DIARIAS (JSONB)
         let historial = registro.consultas_diarias || {};
         
-        // Si es la primera consulta del día, inicializamos en 1, si no, le sumamos +1
-        if (historial[hoy]) {
-            historial[hoy] = historial[hoy] + 1;
-        } else {
-            historial[hoy] = 1;
-        }
+        // ¡TRUCO DE INVISIBILIDAD!: Si NO es una consulta de reporte, sumamos +1 y actualizamos Supabase
+        if (req.query.reporte !== "true") {
+            
+            // Si es la primera consulta del día, inicializamos en 1, si no, le sumamos +1
+            if (historial[hoy]) {
+                historial[hoy] = historial[hoy] + 1;
+            } else {
+                historial[hoy] = 1;
+            }
 
-        // Enviamos la actualización del contador de vuelta a Supabase mediante un PATCH HTTP
-        // const urlUpdate = "https://supabase.co." + encodeURIComponent(clave);
-        const urlUpdate = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq." + encodeURIComponent(clave);
-        await fetch(urlUpdate, {
-            method: 'PATCH',
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': "Bearer " + SUPABASE_KEY,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({ consultas_diarias: historial })
-        });
+            // Enviamos la actualización del contador de vuelta a Supabase
+            const urlUpdate = "https://supabase.co." + encodeURIComponent(clave);
+            await fetch(urlUpdate, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': "Bearer " + SUPABASE_KEY,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ consultas_diarias: historial })
+            });
+        }
 
         // 5. RESPUESTA FINAL SI TODO ESTÁ CORRECTO
         // Evaluamos si el campo general 'activa' de la tabla también es true
