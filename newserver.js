@@ -63,7 +63,8 @@ app.get('/validar-clave', async (req, res) => {
         }
 
         // Enviamos la actualización del contador de vuelta a Supabase mediante un PATCH HTTP
-        const urlUpdate = "https://supabase.co." + encodeURIComponent(clave);
+        // const urlUpdate = "https://supabase.co." + encodeURIComponent(clave);
+        const urlUpdate = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq." + encodeURIComponent(clave);
         await fetch(urlUpdate, {
             method: 'PATCH',
             headers: {
