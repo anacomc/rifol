@@ -78,11 +78,18 @@ app.get('/validar-clave', async (req, res) => {
 
         // 5. RESPUESTA FINAL SI TODO ESTÁ CORRECTO
         // Evaluamos si el campo general 'activa' de la tabla también es true
-        if (registro.activa === true) {
-            return res.json({ activa: true });
-        } else {
-            return res.json({ activa: false, motivo: "Licencia inactiva" });
-        }
+       //  POR ESTE BLOQUE INTEGRAL PARA REPORTES:
+       if (registro.activa === true) {
+          // Enviamos un objeto completo que incluye el historial de consultas diarias
+          return res.json({ 
+          activa: true, 
+          vencimiento: registro.vencimiento, 
+          bloqueada: registro.bloqueada, 
+          consultas_diarias: registro.consultas_diarias 
+      });
+} else {
+    return res.json({ activa: false, motivo: "Licencia inactiva" });
+}
 
     } catch (error) {
         console.error("Error general en el servidor:", error);
