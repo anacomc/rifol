@@ -78,7 +78,12 @@ app.get('/validar-clave', async (req, res) => {
                     'Content-Type': 'application/json',
                     'Prefer': 'return=minimal'
                 },
-                body: JSON.stringify({ consultas_diarias: historial })
+                // ¡AQUÍ SUMAMOS LOS NUEVOS CAMPOS PARA ACTUALIZAR EN SUPABASE!
+                body: JSON.stringify({ 
+                    consultas_diarias: historial,
+                    ultima_ip: ipCliente,
+                    rif_empresa: rifCliente
+                })
             });
         }
 
