@@ -114,7 +114,64 @@ app.get('/validar-clave', async (req, res) => {
         return res.status(500).json({ activa: false, error: "Error interno del servidor" });
     }
 });
+// ************************************************************************************************************
+// =================================================================
+// NUEVA RUTA: REPORTE GENERAL (TRAE ACTIVAS, INACTIVAS, UNA O TODAS)
+// =================================================================
+app.get('/reporte-general', async (req, res) => {
+    const { clave } = req.query; // Si viene vacía, traerá todas
 
+    try {
+        // 1. Construimos la URL de Supabase de forma inteligente
+        let urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?";
+        
+        // Si el usuario especificó una clave en FoxPro, filtramos solo esa; si no, trae todas
+        if (clave) {
+            urlFetch += "&clave=eq." + encodeURIComponent(clave);
+        }
+
+        const response = await fetch(urlFetch, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        // 2. Procesamos y formateamos el arreglo de registros (uno o muchos)
+        const resultadoFinal = data.map(registro => {
+            const historialCrudo = registro.consultas_diarias || {};
+            
+            // Transformamos el objeto consultas_diarias a tu arreglo deseado [{fecha, cantidad}]
+            const arregloFormateado = Object.entries(historialCrudo).map(([fechaKey, cantidadValue]) => {
+                return {
+                    fecha: fechaKey,
+                    cantidad: cantidadValue
+                };
+            });
+
+            // Devolvemos el registro completo sin importar si activa es true o false
+            return {
+                clave: registro.clave,
+                activa: registro.activa,
+                bloqueada: registro.bloqueada,
+                vencimiento: registro.vencimiento,
+                consultas_diarias: arregloFormateado
+            };
+        });
+
+        // 3. Respondemos con la lista de licencias procesadas
+        return res.json({ licencias: resultadoFinal });
+
+    } catch (error) {
+        console.error("Error en reporte general:", error);
+        return res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
+// *********************************************************************************************
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`newserver.js Servidor corriendo en el puerto ${PORT}`);
