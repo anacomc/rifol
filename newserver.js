@@ -92,7 +92,8 @@ app.get('/validar-clave', async (req, res) => {
             // C) ¡LA IDEA FABULOSA!: Insertamos un registro de auditoría en la nueva tabla historial_accesos
             // const urlHistorial = "https://supabase.co";
             // const urlHistorial = urlBase + encodeURIComponent(clave) ;
-            const urlHistorial = urlBase;
+            // const urlBase   = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/historial_accesos";
+            const urlHistorial = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/historial_accesos";
             await fetch(urlHistorial, {
                 method: 'POST', // POST sirve para insertar filas nuevas
                 headers: {
