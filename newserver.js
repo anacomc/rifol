@@ -86,13 +86,25 @@ app.get('/validar-clave', async (req, res) => {
         // Evaluamos si el campo general 'activa' de la tabla también es true
        //  POR ESTE BLOQUE INTEGRAL PARA REPORTES:
        if (registro.activa === true) {
-          // Enviamos un objeto completo que incluye el historial de consultas diarias
-          return res.json({ 
-          activa: true, 
-          vencimiento: registro.vencimiento, 
-          bloqueada: registro.bloqueada, 
-          consultas_diarias: registro.consultas_diarias 
-      });
+            
+            // 1. Tomamos el objeto consultas_diarias (ej: {"2026-07-30":51})
+            const historialCrudo = registro.consultas_diarias || {};
+            
+            // 2. Lo transformamos en un arreglo estructurado [{fecha: "...", cantidad: ...}]
+            const arregloFormateado = Object.entries(historialCrudo).map(([fechaKey, cantidadValue]) => {
+                return {
+                    fecha: fechaKey,
+                    cantidad: cantidadValue
+                };
+            });
+
+            // 3. Enviamos el JSON con el nuevo diseño limpio
+            return res.json({ 
+                activa: true, 
+                vencimiento: registro.vencimiento, 
+                bloqueada: registro.bloqueada, 
+                consultas_diarias: arregloFormateado 
+            });
 } else {
     return res.json({ activa: false, motivo: "Licencia inactiva" });
 }
