@@ -201,6 +201,41 @@ app.get('/reporte-general', async (req, res) => {
     }
 });
 // *********************************************************************************************
+// =================================================================
+// NUEVA RUTA: AUDITORÍA COMPLETA (TRAE EL HISTORIAL PLANO DE LOGS)
+// =================================================================
+app.get('/auditoria-completa', async (req, res) => {
+    const { clave } = req.query;
+
+    try {
+        // Apuntamos directamente a la nueva tabla de logs ordenando por id descendente (los más recientes primero)
+        let urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/historial_accesos";
+        
+        // Si desde FoxPro pides auditar una licencia específica, filtramos; si no, trae todo
+        if (clave) {
+            urlFetch += "&clave=eq." + encodeURIComponent(clave);
+        }
+
+        const response = await fetch(urlFetch, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        // Enviamos la lista plana de registros directamente a FoxPro
+        return res.json({ logs: data });
+
+    } catch (error) {
+        console.error("Error en auditoría completa:", error);
+        return res.status(500).json({ error: "Error interno" });
+    }
+});
+//**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`newserver.js Servidor corriendo en el puerto ${PORT}`);
