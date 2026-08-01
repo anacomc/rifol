@@ -64,7 +64,11 @@ app.get('/validar-clave', async (req, res) => {
             } else {
                 historial[hoy] = 1;
             }
-
+            // CAPTURA AUTOMÁTICA DE IP Y RIF
+            // req.headers['x-forwarded-for'] toma la IP de internet real del cliente a través de Render
+            const ipCliente = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+            const rifCliente = req.query.rif || "No proporcionado";
+            
             // Enviamos la actualización del contador de vuelta a Supabase
             // const urlUpdate = "https://qajwpjecppwvlfbuhhey.supabase.co." + encodeURIComponent(clave);
             // const urlBase   = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
