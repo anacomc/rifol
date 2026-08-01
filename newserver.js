@@ -89,6 +89,25 @@ app.get('/validar-clave', async (req, res) => {
                     rif_empresa: rifCliente
                 })
             });
+            // C) ¡LA IDEA FABULOSA!: Insertamos un registro de auditoría en la nueva tabla historial_accesos
+            // const urlHistorial = "https://supabase.co";
+            // const urlHistorial = urlBase + encodeURIComponent(clave) ;
+            const urlHistorial = urlBase;
+            await fetch(urlHistorial, {
+                method: 'POST', // POST sirve para insertar filas nuevas
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': "Bearer " + SUPABASE_KEY,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ 
+                    clave: clave,
+                    rif: rifCliente,
+                    ip: ipCliente
+                    // La columna 'fecha' se llena sola en Supabase con la fecha actual
+                })
+            });            
         }
 
         // 5. RESPUESTA FINAL SI TODO ESTÁ CORRECTO
