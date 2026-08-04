@@ -235,6 +235,31 @@ app.get('/auditoria-completa', async (req, res) => {
         return res.status(500).json({ error: "Error interno" });
     }
 });
+// =====================================================================
+// DESPERTADOR SECRETO: FUERZA LA CONEXIÓN REAL HACIA LAS TABLAS
+// =====================================================================
+app.get('/despertador-secreto-licencias', async (req, res) => {
+    try {
+        // Ejecutamos una consulta ultra ligera de solo conteo de cabeceras (head: true)
+        // Reemplaza 'licencias' por el nombre real de tu tabla de Supabase
+        const { error } = await supabase
+            .from('licencias') 
+            .select('*', { count: 'exact', head: true });
+
+        if (error) {
+            console.error("Error en Supabase:", error.message);
+            return res.status(500).send("Error en tabla de Supabase: " + error.message);
+        }
+
+        // Si la tubería de PostgreSQL abrió con éxito, respondemos con código 200
+        console.log("Supabase despertado exitosamente por Cron-Job.");
+        res.status(200).send("Base de datos de Supabase Despierta y Operativa.");
+    } catch (err) {
+        console.error("Fallo crítico del despertador:", err.message);
+        res.status(500).send("Fallo de red en el backend: " + err.message);
+    }
+});
+
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
