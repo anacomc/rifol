@@ -73,6 +73,8 @@ app.get('/validar-clave', async (req, res) => {
         
         // OBTENEMOS LA FECHA ACTUAL DEL SERVIDOR EN FORMATO YYYY-MM-DD
         const hoy = new Date().toISOString().split('T')[0];
+        // --- NUEVO: OBTENEMOS LA HORA ACTUAL EN FORMATO HH:MM:SS ---
+        const hora = new Date().toTimeString().split(' ')[0];        
 
         // 2. CONTROL DE BLOQUEO INMEDIATO
         if (registro.bloqueada === true) {
@@ -122,6 +124,7 @@ app.get('/validar-clave', async (req, res) => {
                     consultas_diarias: historial,
                     ultima_ip: ipCliente,
                     rif_empresa: rifCliente
+                    hora: hora
                 })
             });
             // C) ¡LA IDEA FABULOSA!: Insertamos un registro de auditoría en la nueva tabla historial_accesos
