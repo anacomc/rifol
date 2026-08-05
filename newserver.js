@@ -5,6 +5,41 @@ app.use(express.json());
 // REEMPLAZA ÚNICAMENTE ESTA LLAVE CON TU API KEY ANON LARGA DE SUPABASE
 const SUPABASE_KEY = "sb_publishable_lyN_KhNr7al-E2al0AJ-rQ__d0TfJE6";
 
+//*********************************************************************************************************
+// =====================================================================
+// NUEVA RUTA RAÍZ (/): AHORA LA URL LIMPIA SÍ SIFRA Y DESPIERTA SUPABASE
+// =====================================================================
+app.get('/', async (req, res) => {
+    try {
+        // Usamos exactamente tu misma lógica de urlBase de la Parte 1
+        const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        
+        // Hacemos una consulta tonta de limit=1 para forzar el movimiento de PostgreSQL
+        const urlDespertador = urlBase + "clave_despertador" + "&select=clave&limit=1";
+
+        const response = await fetch(urlDespertador, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            console.log("¡ÉXITO! Supabase despertado desde la raíz limpia por visita web.");
+            return res.status(200).send("Servidor Activo y Base de Datos de Supabase Despierta.");
+        } else {
+            return res.status(500).send("Servidor responde, pero Supabase dio alerta.");
+        }
+
+    } catch (error) {
+        return res.status(500).send("Error de comunicación: " + error.message);
+    }
+});
+
+//*********************************************************************************************************
+
 app.get('/validar-clave', async (req, res) => {
     const { clave } = req.query;
 
