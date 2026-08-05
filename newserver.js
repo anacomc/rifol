@@ -123,7 +123,7 @@ app.get('/validar-clave', async (req, res) => {
                 body: JSON.stringify({ 
                     consultas_diarias: historial,
                     ultima_ip: ipCliente,
-                    rif_empresa: rifCliente
+                    rif_empresa: rifCliente,
                     hora: hora
                 })
             });
