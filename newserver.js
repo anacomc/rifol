@@ -123,8 +123,7 @@ app.get('/validar-clave', async (req, res) => {
                 body: JSON.stringify({ 
                     consultas_diarias: historial,
                     ultima_ip: ipCliente,
-                    rif_empresa: rifCliente,
-                    hora: hora
+                    rif_empresa: rifCliente
                 })
             });
             // C) ¡LA IDEA FABULOSA!: Insertamos un registro de auditoría en la nueva tabla historial_accesos
@@ -143,7 +142,8 @@ app.get('/validar-clave', async (req, res) => {
                 body: JSON.stringify({ 
                     clave: clave,
                     rif: rifCliente,
-                    ip: ipCliente
+                    ip: ipCliente,
+                    hora: hora
                     // La columna 'fecha' se llena sola en Supabase con la fecha actual
                 })
             });            
