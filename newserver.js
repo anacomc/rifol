@@ -3,7 +3,7 @@ const app = express();
 app.use(express.json());
 
 // REEMPLAZA ÚNICAMENTE ESTA LLAVE CON TU API KEY ANON LARGA DE SUPABASE
-const SUPABASE_KEY = "sb_publishable_lyN_KhNr7al-E2al0AJ-rQ__d0TfJE6";
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 //*********************************************************************************************************
 // =====================================================================
