@@ -243,7 +243,7 @@ app.get('/despertador-secreto-licencias', async (req, res) => {
         // Ejecutamos una consulta ultra ligera de solo conteo de cabeceras (head: true)
         // Reemplaza 'licencias' por el nombre real de tu tabla de Supabase
         const { error } = await supabase
-            .from('licencias') 
+            .from('https://rfjeldbecbacfcgrkapi.supabase.co/licencias') 
             .select('*', { count: 'exact', head: true });
 
         if (error) {
