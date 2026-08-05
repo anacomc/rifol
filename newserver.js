@@ -236,30 +236,41 @@ app.get('/auditoria-completa', async (req, res) => {
     }
 });
 // =====================================================================
-// DESPERTADOR SECRETO: FUERZA LA CONEXIÓN REAL HACIA LAS TABLAS
+// DESPERTADOR SECRETO: CONECTADO A TU URLBASE DE SUPABASE (FETCH)
 // =====================================================================
 app.get('/despertador-secreto-licencias', async (req, res) => {
     try {
-        // Ejecutamos una consulta ultra ligera de solo conteo de cabeceras (head: true)
-        // Reemplaza 'licencias' por el nombre real de tu tabla de Supabase
-        const { error } = await supabase
-            .from('https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias') 
-            .select('*', { count: 'exact', head: true });
+        // --- REPARADO EN BASE A TU CÓDIGO REAL: USAMOS TU MISMA RUTA DE LA PARTE 1 ---
+        const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        
+        // Consultamos un registro común (limit=1) para forzar el movimiento de la base de datos relacional
+        const urlDespertador = urlBase + "clave_despertador" + "&select=clave&limit=1";
 
-        if (error) {
-            console.error("Error en Supabase:", error.message);
-            return res.status(500).send("Error en tabla de Supabase: " + error.message);
+        // Ejecutamos tu estructura de comandos fetch original con tu constante SUPABASE_KEY
+        const response = await fetch(urlDespertador, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // Si la base de datos de PostgreSQL respondió de forma correcta (Códigos de éxito 2xx)
+        if (response.ok) {
+            console.log("¡ÉXITO! Supabase ha sido despertado de forma forzada por Cron-Job.");
+            return res.status(200).send("Base de datos de Supabase Despierta y Operativa.");
+        } else {
+            const txtError = await response.text();
+            console.error("Supabase rechazó la petición del despertador:", txtError);
+            return res.status(500).send("Supabase respondió con alerta: " + txtError);
         }
 
-        // Si la tubería de PostgreSQL abrió con éxito, respondemos con código 200
-        console.log("Supabase despertado exitosamente por Cron-Job.");
-        res.status(200).send("Base de datos de Supabase Despierta y Operativa.");
-    } catch (err) {
-        console.error("Fallo crítico del despertador:", err.message);
-        res.status(500).send("Fallo de red en el backend: " + err.message);
+    } catch (error) {
+        console.error("Fallo crítico en el despertador de red:", error);
+        return res.status(500).send("Error de comunicación en Render: " + error.message);
     }
 });
-
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
