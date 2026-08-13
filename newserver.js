@@ -336,16 +336,33 @@ app.post('/registrar-master', async (req, res) => {
             }
         });
 
+        // =====================================================================
+        // REPARADO: EXTRAEMOS EL ÍNDICE CERO [0] DEL ARREGLO DE POSTGRES
+        // =====================================================================
         const dataCheck = await responseCheck.json();
 
-        // Si la combinación exacta de este RIF con esta Licencia ya existe en PostgreSQL
+        // El filtro de piratería completo evaluando el registro real [0]
         if (dataCheck && dataCheck.length > 0) {
-            console.log(`⚠️ Registro rechazado: La combinación de RIF y Licencia ya existe.`);
-            return res.json({ 
-                registrado: false, 
-                motivo: "DUPLICADO", 
-                error: "Registro inválido. Esta licencia ya se encuentra asignada a este RIF." 
-            });
+            // --- AQUÍ ESTÁ EL REMACHE: Agarramos la primera fila que devolvió Supabase ---
+            const registroExistente = dataCheck[0]; 
+            
+            // Caso A: Es exactamente el mismo RIF con el mismo Serial (Re-registro inofensivo)
+            if (registroExistente.rif === lcRif) {
+                console.log(`ℹ️ El RIF ${lcRif} ya tiene asignada esta misma licencia.`);
+                return res.json({ 
+                    registrado: false, 
+                    motivo: "DUPLICADO", 
+                    error: "Esta licencia ya se encuentra asignada y activa para su empresa." 
+                });
+            } else {
+                // Caso B: Es un RIF NUEVO intentando clonar el Serial de OTRA empresa (¡PIRATERÍA!)
+                console.log(`⛔ INTENTO DE CLONACIÓN: El RIF ${lcRif} intentó usar el Serial de ${registroExistente.rif}`);
+                return res.json({ 
+                    registrado: false, 
+                    motivo: "DUPLICADO", 
+                    error: "Registro inválido. Esta licencia ya fue activada previamente por otra empresa." 
+                });
+            }
         }
 
         // 3. SI PASA EL CERROJO, PROCEDEMOS A GUARDAR EL NUEVO REGISTRO EN TU TABLA
