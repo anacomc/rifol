@@ -398,6 +398,100 @@ app.post('/registrar-master', async (req, res) => {
         return res.status(200).json({ registrado: false, error: "Conflicto contido de datos: " + error.message });
     }
 });
+// =====================================================================
+// NUEVO ENDPOINT INDEPENDIENTE: ACTIVACIÓN ONLINE EN DOS PASOS (POST)
+// =====================================================================
+app.post('/activar-licencia-online', async (req, res) => {
+    const { licencia, rif } = req.body;
+
+    // Validación básica fail-safe
+    if (!licencia || !rif) {
+        return res.status(400).json({ activada: false, error: "El Serial de Licencia y el RIF son obligatorios." });
+    }
+
+    try {
+        const lcLicencia = licencia.trim();
+        const lcRif = rif.trim().toUpperCase();
+        console.log(`🤖 Iniciando protocolo de activación para Licencia: ${lcLicencia}, RIF: ${lcRif}...`);
+
+        // ---------------------------------------------------------------------
+        // PASO 1: VERIFICAR QUE EL SERIAL EXISTA Y ESTÉ DISPONIBLE EN TU STOCK
+        // ---------------------------------------------------------------------
+        const urlCheckStock = SUPABASE_DISP + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        const responseStock = await fetch(urlCheckStock, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const dataStock = await responseStock.json();
+
+        // Si el lote generado por ti en tu oficina no existe en el inventario
+        if (!dataStock || dataStock.length === 0) {
+            console.log(`❌ Intento inválido: El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
+            return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
+        }
+
+        const registroStock = dataStock[0];
+
+        // Si el serial existe pero ya fue quemado/asignado previamente
+        if (registroStock.status === true) {
+            console.log(`❌ Intento inválido: El Serial ${lcLicencia} ya se encuentra asignado.`);
+            return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 2: PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
+        // ---------------------------------------------------------------------
+        const payloadActivacion = {
+            licencia: lcLicencia,
+            rifasociado: lcRif
+            // La columna 'fechahoraactivacion' se llena sola en Supabase con now()
+        };
+
+        const responseActi = await fetch(SUPABASE_ACTI, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payloadActivacion)
+        });
+
+        if (!responseActi.ok) {
+            const errTxt = await responseActi.text();
+            console.error("Supabase rechazó la inserción en maestro_licencias_activadas:", errTxt);
+            return res.json({ activada: false, error: "La base de datos bloqueó la activación de hardware." });
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 3: QUEMAR EL SERIAL EN TU STOCK CAMBIANDO EL STATUS A TRUE
+        // ---------------------------------------------------------------------
+        const urlUpdateStock = SUPABASE_DISP + `?id=eq.${registroStock.id}`;
+        await fetch(urlUpdateStock, {
+            method: 'PATCH',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ status: true }) // Marcada como Asignada perpetua
+        });
+
+        console.log(`🚀 ¡ÉXITO! Licencia ${lcLicencia} activada y vinculada legítimamente al RIF ${lcRif}.`);
+        return res.status(200).json({ activada: true, mensaje: "Licencia activada y registrada de forma exitosa en la nube." });
+
+    } catch (error) {
+        console.error("Fallo crítico controlado en protocolo de activación:", error);
+        return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
+    }
+});
 
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
