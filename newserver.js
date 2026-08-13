@@ -189,7 +189,7 @@ app.get('/reporte-general', async (req, res) => {
         
         // Si el usuario especificó una clave en FoxPro, filtramos solo esa; si no, trae todas
         if (clave) {
-            urlFetch += "&clave=eq." + encodeURIComponent(clave);
+            urlFetch += "?&clave=eq." + encodeURIComponent(clave);
         }
 
         const response = await fetch(urlFetch, {
