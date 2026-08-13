@@ -490,5 +490,5 @@ app.post('/activar-licencia-online', async (req, res) => {
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`newserver.js Servidor corriendo en el puerto ${PORT}`);
+    console.log(`newserver.js 1. Servidor corriendo en el puerto ${PORT}`);
 });
