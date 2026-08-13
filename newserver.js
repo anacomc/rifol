@@ -308,7 +308,7 @@ app.get('/despertador-secreto-licencias', async (req, res) => {
 // =====================================================================
 // NUEVO ENDPOINT: REGISTRAR LICENCIA MAESTRA DESDE VISUAL FOXPRO (POST)
 // =====================================================================
-app.post('/api/v1/registrar-master', async (req, res) => {
+app.post('/registrar-master', async (req, res) => {
     // Desestructuramos las variables que enviará el búnker de FoxPro
     const { rif, licencia, activa, bloqueada } = req.body;
 
