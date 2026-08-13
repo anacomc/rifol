@@ -308,41 +308,65 @@ app.get('/despertador-secreto-licencias', async (req, res) => {
 // =====================================================================
 // NUEVO ENDPOINT: REGISTRAR LICENCIA MAESTRA DESDE VISUAL FOXPRO (POST)
 // =====================================================================
+// =====================================================================
+// REGISTRAR LICENCIA MAESTRA CON DETECTOR DE DUPLICADOS (POST PURE)
+// =====================================================================
 app.post('/registrar-master', async (req, res) => {
-    // Desestructuramos las variables que enviará el búnker de FoxPro
     const { rif, licencia, activa, bloqueada } = req.body;
 
-    // Validación fail-safe básica
     if (!rif || !licencia) {
         return res.status(400).json({ registrado: false, error: "El RIF y la Licencia (Serial) son obligatorios." });
     }
 
     try {
-        console.log(`Registrando en tabla MASTER el RIF: ${rif} con Serial: ${licencia}...`);
+        const lcRif = rif.trim().toUpperCase();
+        console.log(`Validando existencia previa del RIF: ${lcRif} en tabla MASTER...`);
 
-        // 1. Armamos el payload exacto con los nombres de tus columnas en Supabase
+        // 1. ANTES DE INSERTAR, CONSULTAMOS SI EL RIF O EL SERIAL YA EXISTEN
+        // Consultamos la tabla MASTER filtrando por tu columna 'rif' (select=rif)
+        const urlCheck = SUPABASE_MAST + `?rif=eq.${encodeURIComponent(lcRif)}`;
+        const responseCheck = await fetch(urlCheck, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const dataCheck = await responseCheck.json();
+
+        // 2. EL CANDADO DE CONTROL: Si el arreglo trae filas, es porque YA EXISTE
+        if (dataCheck && dataCheck.length > 0) {
+            console.log(`⚠️ Registro rechazado: El RIF ${lcRif} ya posee una licencia registrada.`);
+            return res.json({ 
+                registrado: false, 
+                motivo: "DUPLICADO", 
+                error: "Registro inválido. La licencia ya fue registrada previamente." 
+            });
+        }
+
+        // 3. SI NO EXISTE DUPLICADO, PROCEDEMOS CON TU INSERCIÓN INDESTRUCTIBLE
         const payloadMaster = {
-            rif: rif.trim().toUpperCase(),
+            rif: lcRif,
             licencia: licencia.trim(),
-            activa: activa !== undefined ? activa : true,      // Si no viene, se activa por defecto
-            bloqueada: bloqueada !== undefined ? bloqueada : false // Si no viene, nace desbloqueada
+            activa: activa !== undefined ? activa : true,
+            bloqueada: bloqueada !== undefined ? bloqueada : false
         };
 
-        // 2. Disparamos el fetch síncronizado hacia tu constante de la tabla MASTER (SUPABASE_MAST)
-        // Usamos 'resolution=merge-duplicates' por si el RIF ya existe, actualice la licencia (UPSERT)
         const responseSupabase = await fetch(SUPABASE_MAST, {
             method: 'POST',
             headers: {
                 'apikey': SUPABASE_KEY,
                 'Authorization': "Bearer " + SUPABASE_KEY,
                 'Content-Type': 'application/json',
-                'Prefer': 'resolution=merge-duplicates' 
+                'Prefer': 'return=minimal' // Ya no necesitamos resolution=merge porque evitamos el choque arriba
             },
             body: JSON.stringify(payloadMaster)
         });
 
         if (responseSupabase.ok) {
-            console.log(`¡Éxito! Licencia para el RIF ${rif} guardada en Supabase.`);
+            console.log(`¡Éxito! Nueva licencia para el RIF ${lcRif} guardada en Supabase.`);
             return res.status(200).json({ registrado: true, mensaje: "Licencia maestra creada exitosamente." });
         } else {
             const errorTxt = await responseSupabase.text();
