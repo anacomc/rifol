@@ -404,7 +404,6 @@ app.post('/registrar-master', async (req, res) => {
 app.post('/activar-licencia-online', async (req, res) => {
     const { licencia, rif } = req.body;
 
-    // Validación básica fail-safe
     if (!licencia || !rif) {
         return res.status(400).json({ activada: false, error: "El Serial de Licencia y el RIF son obligatorios." });
     }
@@ -412,11 +411,9 @@ app.post('/activar-licencia-online', async (req, res) => {
     try {
         const lcLicencia = licencia.trim();
         const lcRif = rif.trim().toUpperCase();
-        console.log(`🤖 Iniciando protocolo de activación para Licencia: ${lcLicencia}, RIF: ${lcRif}...`);
+        console.log(`🤖 Protocolo de activación para Licencia: ${lcLicencia}, RIF: ${lcRif}...`);
 
-        // ---------------------------------------------------------------------
-        // PASO 1: VERIFICAR QUE EL SERIAL EXISTA Y ESTÉ DISPONIBLE EN TU STOCK
-        // ---------------------------------------------------------------------
+        // 1. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
         const urlCheckStock = SUPABASE_DISP + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
         const responseStock = await fetch(urlCheckStock, {
             method: 'GET',
@@ -429,30 +426,28 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         const dataStock = await responseStock.json();
 
-        // Si el lote generado por ti en tu oficina no existe en el inventario
+        // Si el arreglo viene completamente vacío de Supabase
         if (!dataStock || dataStock.length === 0) {
-            console.log(`❌ Intento inválido: El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
+            console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
             return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
         }
 
+        // --- REMACHE SUPREMO: Extraemos explícitamente la fila cero [0] del arreglo ---
         const registroStock = dataStock[0];
 
-        // Si el serial existe pero ya fue quemado/asignado previamente
+        // Evaluamos si el estatus ya fue quemado (true = Asignado)
         if (registroStock.status === true) {
-            console.log(`❌ Intento inválido: El Serial ${lcLicencia} ya se encuentra asignado.`);
+            console.log(`❌ El Serial ${lcLicencia} ya se encuentra quemado/asignado.`);
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
         }
 
-        // ---------------------------------------------------------------------
-        // PASO 2: PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
-        // ---------------------------------------------------------------------
+        // 2. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
         const payloadActivacion = {
             licencia: lcLicencia,
             rifasociado: lcRif
-            // La columna 'fechahoraactivacion' se llena sola en Supabase con now()
         };
 
-        const responseActi = await fetch(SUPABASE_ACTI, {
+        const responseActi = await fetch(SUPABASE_ACTIVADAS || SUPABASE_ACTI, {
             method: 'POST',
             headers: {
                 'apikey': SUPABASE_KEY,
@@ -465,13 +460,11 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         if (!responseActi.ok) {
             const errTxt = await responseActi.text();
-            console.error("Supabase rechazó la inserción en maestro_licencias_activadas:", errTxt);
-            return res.json({ activada: false, error: "La base de datos bloqueó la activación de hardware." });
+            console.error("Supabase rechazó la inserción en activadas:", errTxt);
+            return res.json({ activada: false, error: "La base de datos bloqueó la activación por hardware." });
         }
 
-        // ---------------------------------------------------------------------
-        // PASO 3: QUEMAR EL SERIAL EN TU STOCK CAMBIANDO EL STATUS A TRUE
-        // ---------------------------------------------------------------------
+        // 3. QUEMAR EL SERIAL EN TU STOCK DE DISPONIBLES CAMBIANDO EL STATUS A TRUE
         const urlUpdateStock = SUPABASE_DISP + `?id=eq.${registroStock.id}`;
         await fetch(urlUpdateStock, {
             method: 'PATCH',
@@ -481,10 +474,10 @@ app.post('/activar-licencia-online', async (req, res) => {
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal'
             },
-            body: JSON.stringify({ status: true }) // Marcada como Asignada perpetua
+            body: JSON.stringify({ status: true }) // Marcada como Asignada para siempre
         });
 
-        console.log(`🚀 ¡ÉXITO! Licencia ${lcLicencia} activada y vinculada legítimamente al RIF ${lcRif}.`);
+        console.log(`🚀 ¡ÉXITO MULTI-TABLA! Licencia ${lcLicencia} asignada legítimamente al RIF ${lcRif}.`);
         return res.status(200).json({ activada: true, mensaje: "Licencia activada y registrada de forma exitosa en la nube." });
 
     } catch (error) {
@@ -492,6 +485,7 @@ app.post('/activar-licencia-online', async (req, res) => {
         return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
     }
 });
+
 
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
