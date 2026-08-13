@@ -4,6 +4,7 @@ app.use(express.json());
 
 // REEMPLAZA ÚNICAMENTE ESTA LLAVE CON TU API KEY ANON LARGA DE SUPABASE
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_HOME = process.env.SUPABASE_HOME;
 
 //*********************************************************************************************************
 // =====================================================================
@@ -279,7 +280,8 @@ app.get('/auditoria-completa', async (req, res) => {
 app.get('/despertador-secreto-licencias', async (req, res) => {
     try {
         // --- REPARADO EN BASE A TU CÓDIGO REAL: USAMOS TU MISMA RUTA DE LA PARTE 1 ---
-        const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        // const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        const urlBase = SUPABASE_HOME+"?clave=eq.";
         
         // Consultamos un registro común (limit=1) para forzar el movimiento de la base de datos relacional
         const urlDespertador = urlBase + "clave_despertador" + "&select=clave&limit=1";
