@@ -5,6 +5,7 @@ app.use(express.json());
 // REEMPLAZA ÚNICAMENTE ESTA LLAVE CON TU API KEY ANON LARGA DE SUPABASE
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const SUPABASE_HOME = process.env.SUPABASE_HOME;
+const SUPABASE_HIST = process.env.SUPABASE_HISTORIAL;
 
 //*********************************************************************************************************
 // =====================================================================
@@ -13,7 +14,8 @@ const SUPABASE_HOME = process.env.SUPABASE_HOME;
 app.get('/', async (req, res) => {
     try {
         // Usamos exactamente tu misma lógica de urlBase de la Parte 1
-        const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        // const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        const urlBase = SUPABASE_HOME + "?clave=eq.";
         
         // Hacemos una consulta tonta de limit=1 para forzar el movimiento de PostgreSQL
         const urlDespertador = urlBase + "clave_despertador" + "&select=clave&limit=1";
@@ -51,7 +53,8 @@ app.get('/validar-clave', async (req, res) => {
     try {
         // 1. Solicitamos los campos necesarios de la tabla licencias
         // const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa,bloqueada,vencimiento,consultas_diarias";
-        const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        // const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
+        const urlBase = SUPABASE_HOME + "?clave=eq.";
         const urlFetch = urlBase + encodeURIComponent(clave) + "&select=activa,bloqueada,vencimiento,consultas_diarias";
        
         const response = await fetch(urlFetch, {
@@ -131,7 +134,7 @@ app.get('/validar-clave', async (req, res) => {
             // const urlHistorial = "https://supabase.co";
             // const urlHistorial = urlBase + encodeURIComponent(clave) ;
             // const urlBase   = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/historial_accesos";
-            const urlHistorial = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/historial_accesos";
+            const urlHistorial = SUPABASE_HIST;
             await fetch(urlHistorial, {
                 method: 'POST', // POST sirve para insertar filas nuevas
                 headers: {
@@ -248,7 +251,7 @@ app.get('/auditoria-completa', async (req, res) => {
 
     try {
         // Apuntamos directamente a la nueva tabla de logs ordenando por id descendente (los más recientes primero)
-        let urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/historial_accesos";
+        let urlFetch = SUPABASE_HIST;
         
         // Si desde FoxPro pides auditar una licencia específica, filtramos; si no, trae todo
         if (clave) {
