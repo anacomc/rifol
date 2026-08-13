@@ -305,6 +305,57 @@ app.get('/despertador-secreto-licencias', async (req, res) => {
         return res.status(500).send("Error de comunicación en Render: " + error.message);
     }
 });
+// =====================================================================
+// NUEVO ENDPOINT: REGISTRAR LICENCIA MAESTRA DESDE VISUAL FOXPRO (POST)
+// =====================================================================
+app.post('/api/v1/registrar-master', async (req, res) => {
+    // Desestructuramos las variables que enviará el búnker de FoxPro
+    const { rif, licencia, activa, bloqueada } = req.body;
+
+    // Validación fail-safe básica
+    if (!rif || !licencia) {
+        return res.status(400).json({ registrado: false, error: "El RIF y la Licencia (Serial) son obligatorios." });
+    }
+
+    try {
+        console.log(`Registrando en tabla MASTER el RIF: ${rif} con Serial: ${licencia}...`);
+
+        // 1. Armamos el payload exacto con los nombres de tus columnas en Supabase
+        const payloadMaster = {
+            rif: rif.trim().toUpperCase(),
+            licencia: licencia.trim(),
+            activa: activa !== undefined ? activa : true,      // Si no viene, se activa por defecto
+            bloqueada: bloqueada !== undefined ? bloqueada : false // Si no viene, nace desbloqueada
+        };
+
+        // 2. Disparamos el fetch síncronizado hacia tu constante de la tabla MASTER (SUPABASE_MAST)
+        // Usamos 'resolution=merge-duplicates' por si el RIF ya existe, actualice la licencia (UPSERT)
+        const responseSupabase = await fetch(SUPABASE_MAST, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates' 
+            },
+            body: JSON.stringify(payloadMaster)
+        });
+
+        if (responseSupabase.ok) {
+            console.log(`¡Éxito! Licencia para el RIF ${rif} guardada en Supabase.`);
+            return res.status(200).json({ registrado: true, mensaje: "Licencia maestra creada exitosamente." });
+        } else {
+            const errorTxt = await responseSupabase.text();
+            console.error("Supabase rechazó la inserción en MASTER:", errorTxt);
+            return res.status(500).json({ registrado: false, error: "Supabase rechazó el registro." });
+        }
+
+    } catch (error) {
+        console.error("Fallo crítico en la ruta registrar-master:", error);
+        return res.status(500).json({ registrado: false, error: "Error interno en Render: " + error.message });
+    }
+});
+
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
