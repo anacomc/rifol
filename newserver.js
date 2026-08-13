@@ -308,6 +308,9 @@ app.get('/despertador-secreto-licencias', async (req, res) => {
 // =====================================================================
 // NUEVO ENDPOINT: REGISTRAR LICENCIA MAESTRA DESDE VISUAL FOXPRO (POST)
 // =====================================================================
+// =====================================================================
+// CORREGIDO: REGISTRAR LICENCIA MAESTRA - BLINDAJE DE SERIAL (POST)
+// =====================================================================
 app.post('/registrar-master', async (req, res) => {
     const { rif, licencia, activa, bloqueada } = req.body;
 
@@ -318,14 +321,10 @@ app.post('/registrar-master', async (req, res) => {
     try {
         const lcRif = rif.trim().toUpperCase();
         const lcLicencia = licencia.trim();
-        console.log(`Validando duplicidad de Serial: ${lcLicencia} para el RIF: ${lcRif}...`);
+        console.log(`Validando propiedad de Serial único: ${lcLicencia}...`);
 
-        // =====================================================================
-        // LA JUGADA MAESTRA: CONSULTA ANIDADA (RIF EQUALS AND LICENCIA EQUALS)
-        // =====================================================================
-        // En la API REST de Supabase, el operador 'and' se concatena agrupando los filtros
-        // entre paréntesis: ?and=(rif.eq.VALOR,licencia.eq.VALOR)
-        const urlCheck = SUPABASE_MAST + `?and=(rif.eq.${encodeURIComponent(lcRif)},licencia.eq.${encodeURIComponent(lcLicencia)})`;
+        // 1. INTERROGAMOS A SUPABASE PARA VER SI LA LICENCIA YA EXISTE
+        const urlCheck = SUPABASE_MAST + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
         
         const responseCheck = await fetch(urlCheck, {
             method: 'GET',
@@ -336,14 +335,11 @@ app.post('/registrar-master', async (req, res) => {
             }
         });
 
-        // =====================================================================
-        // REPARADO: EXTRAEMOS EL ÍNDICE CERO [0] DEL ARREGLO DE POSTGRES
-        // =====================================================================
         const dataCheck = await responseCheck.json();
 
-        // El filtro de piratería completo evaluando el registro real [0]
-        if (dataCheck && dataCheck.length > 0) {
-            // --- AQUÍ ESTÁ EL REMACHE: Agarramos la primera fila que devolvió Supabase ---
+        // 2. EL CANDADO DE CONTROL DE PIRATERÍA CORREGIDO
+        if (Array.isArray(dataCheck) && dataCheck.length > 0) {
+            // --- REMACHE SEGURO: Extraemos con total precisión la fila cero ---
             const registroExistente = dataCheck[0]; 
             
             // Caso A: Es exactamente el mismo RIF con el mismo Serial (Re-registro inofensivo)
@@ -365,7 +361,7 @@ app.post('/registrar-master', async (req, res) => {
             }
         }
 
-        // 3. SI PASA EL CERROJO, PROCEDEMOS A GUARDAR EL NUEVO REGISTRO EN TU TABLA
+        // 3. SI EL SERIAL ESTÁ LIBRE, SE PROCEDE A INSERTAR LA NUEVA FILA
         const payloadMaster = {
             rif: lcRif,
             licencia: lcLicencia,
@@ -385,17 +381,18 @@ app.post('/registrar-master', async (req, res) => {
         });
 
         if (responseSupabase.ok) {
-            console.log(`¡Éxito! Nueva licencia vinculada al RIF ${lcRif} guardada en MASTER.`);
+            console.log(`¡Éxito! Licencia única vinculada al RIF ${lcRif} guardada en MASTER.`);
             return res.status(200).json({ registrado: true, mensaje: "Licencia maestra creada exitosamente." });
         } else {
             const errorTxt = await responseSupabase.text();
-            console.error("Supabase rechazó la inserción en MASTER:", errorTxt);
-            return res.status(500).json({ registrado: false, error: "Supabase rechazó el registro." });
+            console.error("Supabase rechazó la inserción física:", errorTxt);
+            return res.status(200).json({ registrado: false, error: "La base de datos bloqueó el registro." });
         }
 
     } catch (error) {
-        console.error("Fallo crítico en la ruta registrar-master:", error);
-        return res.status(500).json({ registrado: false, error: "Error interno en Render: " + error.message });
+        console.error("Fallo crítico controlado en ruta registrar-master:", error);
+        // Atajamos cualquier pánico de hardware y respondemos con status 200 para que VFP lea el JSON sin reventarse
+        return res.status(200).json({ registrado: false, error: "Conflicto contido de datos: " + error.message });
     }
 });
 
