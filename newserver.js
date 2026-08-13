@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// REEMPLAZA ÚNICAMENTE ESTA LLAVE CON TU API KEY ANON LARGA DE SUPABASE
+// API KEY ANON LARGA DE SUPABASE
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const SUPABASE_HOME = process.env.SUPABASE_HOME;
 const SUPABASE_HIST = process.env.SUPABASE_HISTORIAL;
