@@ -189,7 +189,7 @@ app.get('/reporte-general', async (req, res) => {
         
         // Si el usuario especificó una clave en FoxPro, filtramos solo esa; si no, trae todas
         if (clave) {
-            urlFetch += "?&clave=eq." + encodeURIComponent(clave);
+            urlFetch += "&clave=eq." + encodeURIComponent(clave);
         }
 
         const response = await fetch(urlFetch, {
@@ -242,7 +242,7 @@ app.get('/auditoria-completa', async (req, res) => {
 
     try {
         // Apuntamos directamente a la nueva tabla de logs ordenando por id descendente (los más recientes primero)
-        let urlFetch = SUPABASE_HIST;
+        let urlFetch = SUPABASE_HIST + "?";
         
         // Si desde FoxPro pides auditar una licencia específica, filtramos; si no, trae todo
         if (clave) {
