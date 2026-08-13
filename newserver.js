@@ -14,7 +14,6 @@ const SUPABASE_HIST = process.env.SUPABASE_HISTORIAL;
 app.get('/', async (req, res) => {
     try {
         // Usamos exactamente tu misma lógica de urlBase de la Parte 1
-        // const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
         const urlBase = SUPABASE_HOME + "?clave=eq.";
         
         // Hacemos una consulta tonta de limit=1 para forzar el movimiento de PostgreSQL
@@ -52,8 +51,6 @@ app.get('/validar-clave', async (req, res) => {
 
     try {
         // 1. Solicitamos los campos necesarios de la tabla licencias
-        // const urlFetch = "https://supabase.co." + encodeURIComponent(clave) + "&select=activa,bloqueada,vencimiento,consultas_diarias";
-        // const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
         const urlBase = SUPABASE_HOME + "?clave=eq.";
         const urlFetch = urlBase + encodeURIComponent(clave) + "&select=activa,bloqueada,vencimiento,consultas_diarias";
        
@@ -111,9 +108,6 @@ app.get('/validar-clave', async (req, res) => {
             const rifCliente = req.query.rif || "No proporcionado";
             
             // Enviamos la actualización del contador de vuelta a Supabase
-            // const urlUpdate = "https://qajwpjecppwvlfbuhhey.supabase.co." + encodeURIComponent(clave);
-            // const urlBase   = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
-            // const urlUpdate = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq." + encodeURIComponent(clave) ;
             const urlUpdate = urlBase + encodeURIComponent(clave) ;
             await fetch(urlUpdate, {
                 method: 'PATCH',
@@ -131,9 +125,6 @@ app.get('/validar-clave', async (req, res) => {
                 })
             });
             // C) ¡LA IDEA FABULOSA!: Insertamos un registro de auditoría en la nueva tabla historial_accesos
-            // const urlHistorial = "https://supabase.co";
-            // const urlHistorial = urlBase + encodeURIComponent(clave) ;
-            // const urlBase   = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/historial_accesos";
             const urlHistorial = SUPABASE_HIST;
             await fetch(urlHistorial, {
                 method: 'POST', // POST sirve para insertar filas nuevas
@@ -194,7 +185,7 @@ app.get('/reporte-general', async (req, res) => {
 
     try {
         // 1. Construimos la URL de Supabase de forma inteligente
-        let urlFetch = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?";
+        let urlFetch = SUPABASE_HOME + "?";
         
         // Si el usuario especificó una clave en FoxPro, filtramos solo esa; si no, trae todas
         if (clave) {
@@ -283,7 +274,6 @@ app.get('/auditoria-completa', async (req, res) => {
 app.get('/despertador-secreto-licencias', async (req, res) => {
     try {
         // --- REPARADO EN BASE A TU CÓDIGO REAL: USAMOS TU MISMA RUTA DE LA PARTE 1 ---
-        // const urlBase = "https://qajwpjecppwvlfbuhhey.supabase.co/rest/v1/licencias?clave=eq.";
         const urlBase = SUPABASE_HOME+"?clave=eq.";
         
         // Consultamos un registro común (limit=1) para forzar el movimiento de la base de datos relacional
