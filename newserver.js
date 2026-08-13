@@ -308,9 +308,6 @@ app.get('/despertador-secreto-licencias', async (req, res) => {
 // =====================================================================
 // NUEVO ENDPOINT: REGISTRAR LICENCIA MAESTRA DESDE VISUAL FOXPRO (POST)
 // =====================================================================
-// =====================================================================
-// REGISTRAR LICENCIA MAESTRA CON DETECTOR DE DUPLICADOS (POST PURE)
-// =====================================================================
 app.post('/registrar-master', async (req, res) => {
     const { rif, licencia, activa, bloqueada } = req.body;
 
@@ -320,11 +317,16 @@ app.post('/registrar-master', async (req, res) => {
 
     try {
         const lcRif = rif.trim().toUpperCase();
-        console.log(`Validando existencia previa del RIF: ${lcRif} en tabla MASTER...`);
+        const lcLicencia = licencia.trim();
+        console.log(`Validando duplicidad de Serial: ${lcLicencia} para el RIF: ${lcRif}...`);
 
-        // 1. ANTES DE INSERTAR, CONSULTAMOS SI EL RIF O EL SERIAL YA EXISTEN
-        // Consultamos la tabla MASTER filtrando por tu columna 'rif' (select=rif)
-        const urlCheck = SUPABASE_MAST + `?rif=eq.${encodeURIComponent(lcRif)}`;
+        // =====================================================================
+        // LA JUGADA MAESTRA: CONSULTA ANIDADA (RIF EQUALS AND LICENCIA EQUALS)
+        // =====================================================================
+        // En la API REST de Supabase, el operador 'and' se concatena agrupando los filtros
+        // entre paréntesis: ?and=(rif.eq.VALOR,licencia.eq.VALOR)
+        const urlCheck = SUPABASE_MAST + `?and=(rif.eq.${encodeURIComponent(lcRif)},licencia.eq.${encodeURIComponent(lcLicencia)})`;
+        
         const responseCheck = await fetch(urlCheck, {
             method: 'GET',
             headers: {
@@ -336,20 +338,20 @@ app.post('/registrar-master', async (req, res) => {
 
         const dataCheck = await responseCheck.json();
 
-        // 2. EL CANDADO DE CONTROL: Si el arreglo trae filas, es porque YA EXISTE
+        // Si la combinación exacta de este RIF con esta Licencia ya existe en PostgreSQL
         if (dataCheck && dataCheck.length > 0) {
-            console.log(`⚠️ Registro rechazado: El RIF ${lcRif} ya posee una licencia registrada.`);
+            console.log(`⚠️ Registro rechazado: La combinación de RIF y Licencia ya existe.`);
             return res.json({ 
                 registrado: false, 
                 motivo: "DUPLICADO", 
-                error: "Registro inválido. La licencia ya fue registrada previamente." 
+                error: "Registro inválido. Esta licencia ya se encuentra asignada a este RIF." 
             });
         }
 
-        // 3. SI NO EXISTE DUPLICADO, PROCEDEMOS CON TU INSERCIÓN INDESTRUCTIBLE
+        // 3. SI PASA EL CERROJO, PROCEDEMOS A GUARDAR EL NUEVO REGISTRO EN TU TABLA
         const payloadMaster = {
             rif: lcRif,
-            licencia: licencia.trim(),
+            licencia: lcLicencia,
             activa: activa !== undefined ? activa : true,
             bloqueada: bloqueada !== undefined ? bloqueada : false
         };
@@ -360,13 +362,13 @@ app.post('/registrar-master', async (req, res) => {
                 'apikey': SUPABASE_KEY,
                 'Authorization': "Bearer " + SUPABASE_KEY,
                 'Content-Type': 'application/json',
-                'Prefer': 'return=minimal' // Ya no necesitamos resolution=merge porque evitamos el choque arriba
+                'Prefer': 'return=minimal'
             },
             body: JSON.stringify(payloadMaster)
         });
 
         if (responseSupabase.ok) {
-            console.log(`¡Éxito! Nueva licencia para el RIF ${lcRif} guardada en Supabase.`);
+            console.log(`¡Éxito! Nueva licencia vinculada al RIF ${lcRif} guardada en MASTER.`);
             return res.status(200).json({ registrado: true, mensaje: "Licencia maestra creada exitosamente." });
         } else {
             const errorTxt = await responseSupabase.text();
