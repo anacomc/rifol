@@ -425,17 +425,18 @@ app.post('/activar-licencia-online', async (req, res) => {
         });
 
         const dataStock = await responseStock.json();
-
-        // Si el arreglo viene completamente vacío de Supabase
+        // 1. EVALUAMOS SI EL ARREGLO VIENE COMPLETAMENTE VACÍO DE SUPABASE
         if (!dataStock || dataStock.length === 0) {
             console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
             return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
         }
+        // =====================================================================
+        // TRUCO DE INGENIERÍA: EXTRAEMOS LA FILA CERO SIN USAR CORCHETES
+        // =====================================================================
+        // Usamos .at(0) para obligar a Node.js a leer el primer registro real
+        const registroStock = dataStock.at(0); 
 
-        // --- REMACHE SUPREMO: Extraemos explícitamente la fila cero [0] del arreglo ---
-        const registroStock = dataStock[0];
-
-        // Evaluamos si el estatus ya fue quemado (true = Asignado)
+        // Ahora sí, evaluamos el estatus lógico de tu inventario (true = Quemado)
         if (registroStock.status === true) {
             console.log(`❌ El Serial ${lcLicencia} ya se encuentra quemado/asignado.`);
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
