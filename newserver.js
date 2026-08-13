@@ -7,6 +7,9 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const SUPABASE_HOME = process.env.SUPABASE_HOME;
 const SUPABASE_HIST = process.env.SUPABASE_HISTORIAL;
 const SUPABASE_MAST = process.env.SUPABASE_MASTER;
+const SUPABASE_DISP = process.env.SUPABASE_DISPONIBLES;
+const SUPABASE_ACTI = process.env.SUPABASE_ACTIVADAS;  
+
 
 //*********************************************************************************************************
 // =====================================================================
