@@ -566,7 +566,7 @@ app.post('/validar-acceso-diario', async (req, res) => {
             return res.json({ acceso: false, motivo: "RIF_INCORRECTO", error: "La licencia no se encuentra vinculada al RIF suministrado." });
         }
 
-        const registroCliente = dataActivadas;
+        const registroCliente = dataActivadas[0];
 
         // Candado C: ¿Está activa y NO bloqueada?
         if (registroCliente.activa !== true || registroCliente.bloqueada === true) {
