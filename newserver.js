@@ -415,6 +415,7 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         // 1. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
         const urlCheckStock = SUPABASE_DISP + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        console.log(`🤖 url: ${urlCheckStock}`);
         
         // --- CABECERAS BLINDADAS: IDÉNTICAS A TU VALIDAR-CLAVE GANADOR ---
         const responseStock = await fetch(urlCheckStock, {
@@ -425,13 +426,7 @@ app.post('/activar-licencia-online', async (req, res) => {
                 'Content-Type': 'application/json'
             }
         });
-
-        const dataStock = await responseStock.json();
-        const errTxt1 = dataStock[0];
-        console.error("Supabase rechazó la inserción en activadas:", errTxt1);
-        const errTxt2 = dataStock[1];
-        console.error("Supabase rechazó la inserción en activadas:", errTxt2);
-
+        console.log(`🤖 responseStock: ${responseStock}`);
         // Si el arreglo viene completamente vacío de Supabase (No hubo coincidencia física)
         if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
             console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
