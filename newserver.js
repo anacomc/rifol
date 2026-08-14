@@ -585,16 +585,22 @@ app.post('/validar-acceso-diario', async (req, res) => {
         }
 
         // ---------------------------------------------------------------------
-        // PASO 3: TODO OK -> REGISTRAMOS EN TU TABLA HISTORIAL_DE_ACCESOS
+        // PASO 3: REPARADO - REGISTRAMOS EN TU TABLA HISTORIAL_DE_ACCESOS
         // ---------------------------------------------------------------------
+        // Capturamos la IP real del cliente a través de las cabeceras de Render
         const ipCliente = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "0.0.0.0";
+
         const payloadAcceso = {
             licencia: lcLicencia,
             rifasociado: lcRif,
             ipaddress: ipCliente
+            // La columna 'fechahoraacceso' se llena sola en Supabase con now() por hardware
         };
 
-        await fetch(process.env.SUPABASE_ACCESOS, {
+        console.log(`📡 Disparando registro binario de IP hacia: ${process.env.SUPABASE_ACCESOS}`);
+
+        // --- EL REMACHE DEFINITIVO: Clavamos la variable exacta con la S al final ---
+        const responseLog = await fetch(process.env.SUPABASE_ACCESOS, {
             method: 'POST',
             headers: {
                 'apikey': SUPABASE_KEY,
@@ -605,9 +611,14 @@ app.post('/validar-acceso-diario', async (req, res) => {
             body: JSON.stringify(payloadAcceso)
         });
 
-        // LUZ VERDE ABSOLUTA AL CAPTCHASOLVER
-        console.log(`🚀 ¡LUZ VERDE! Acceso concedido a Licencia: ${lcLicencia}, RIF: ${lcRif}, IP: ${ipCliente}`);
-        return res.status(200).json({ acceso: true, mensaje: "Validación exitosa. Licencia vigente y autorizada." });
+        if (responseLog.ok) {
+            console.log(`✅ Acceso concedido y bitácora guardada para Licencia: ${lcLicencia}, IP: ${ipCliente}`);
+            return res.status(200).json({ acceso: true, mensaje: "Validación exitosa. Licencia vigente y autorizada." });
+        } else {
+            const errLogTxt = await responseLog.text();
+            console.error("❌ Supabase rechazó la inserción en el historial:", errLogTxt);
+            return res.json({ acceso: false, error: "Acceso concedido, pero la base de datos rechazó el registro de bitácora." });
+        }
 
     } catch (error) {
         console.error("Fallo crítico en protocolo de validación diaria:", error);
