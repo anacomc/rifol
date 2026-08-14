@@ -454,7 +454,7 @@ app.post('/activar-licencia-online', async (req, res) => {
             rifasociado: lcRif
         };
 
-        const responseActi = await fetch(SUPABASE_ACTIVADAS || SUPABASE_ACTI, {
+        const responseActi = await fetch(SUPABASE_ACTI, {
             method: 'POST',
             headers: {
                 'apikey': SUPABASE_KEY,
