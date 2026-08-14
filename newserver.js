@@ -426,9 +426,6 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         const dataStock = await responseStock.json();
 
-        // =====================================================================
-        // DIAGNÓSTICO DIGITAL AUTOMÁTICO: LEVANTAMOS LA ALFOMBRA DE LA RAM
-        // =====================================================================
         // Si entra aquí, te va a devolver en el cuadro de FoxPro/C# el string 
         // exacto de lo que leyó de Supabase para ver las etiquetas y valores reales.
         if (!dataStock || dataStock.length === 0 || Array.isArray(dataStock) === false) {
@@ -436,7 +433,6 @@ app.post('/activar-licencia-online', async (req, res) => {
             
             // Transformamos el objeto crudo a texto para enviártelo de vuelta
             const jsonCrudoDeLaRAM = JSON.stringify(dataStock);
-            
             return res.json({ 
                 activada: false, 
                 motivo: "INEXISTENTE", 
