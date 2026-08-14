@@ -538,7 +538,7 @@ app.post('/validar-acceso-diario', async (req, res) => {
             return res.json({ acceso: false, motivo: "INEXISTENTE", error: "Licencia no válida o no ha sido dada de alta." });
         }
 
-        const registroStock = dataStock;
+        const registroStock = dataStock[0];
         if (registroStock.status !== true) {
             console.log(`⛔ Acceso Denegado: Licencia ${lcLicencia} no ha sido asignada aún.`);
             return res.json({ acceso: false, motivo: "NO_ASIGNADA", error: "Esta licencia no se encuentra activada ni asignada en el sistema." });
