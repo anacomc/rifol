@@ -399,7 +399,7 @@ app.post('/registrar-master', async (req, res) => {
     }
 });
 // =====================================================================
-// DEFINITIVO: ACTIVACIÓN ONLINE EN DOS PASOS (POST PURE)
+// INDESTRUCTIBLE: ACTIVACIÓN ONLINE EN DOS PASOS (POST PURE)
 // =====================================================================
 app.post('/activar-licencia-online', async (req, res) => {
     const { licencia, rif } = req.body;
@@ -415,9 +415,7 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         // 1. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
         const urlCheckStock = SUPABASE_DISP + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
-        console.log(`🤖 url: ${urlCheckStock}`);
         
-        // --- CABECERAS BLINDADAS: IDÉNTICAS A TU VALIDAR-CLAVE GANADOR ---
         const responseStock = await fetch(urlCheckStock, {
             method: 'GET',
             headers: {
@@ -426,21 +424,29 @@ app.post('/activar-licencia-online', async (req, res) => {
                 'Content-Type': 'application/json'
             }
         });
-        console.log(`🤖 responseStock: ${responseStock}`);
-        // Si el arreglo viene completamente vacío de Supabase (No hubo coincidencia física)
-        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+
+        const dataStock = await responseStock.json();
+
+        // VALIDACIÓN INTEGRAL DE HARDWARE: Si viene vacío, nulo o indefinido
+        if (!dataStock || (Array.isArray(dataStock) && dataStock.length === 0)) {
             console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
             return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
         }
 
-        // Extraemos de forma segura el índice cero del arreglo de PostgreSQL
-        const registroStock = dataStock[0]; 
+        // =====================================================================
+        // CONTROL DE REBOTE: SE TRAGA EL REGISTRO TANTO SI ES ARREGLO O OBJETO
+        // =====================================================================
+        // Si dataStock es un Arreglo [], extrae el índice 0; si es un Objeto {}, lo usa directo
+        const registroStock = Array.isArray(dataStock) ? dataStock[0] : dataStock; 
 
-        // Evaluamos si el estatus ya fue quemado (true = Asignado)
+        // Evaluamos el estatus de tu inventario (true = Quemado / Asignado)
         if (registroStock.status === true) {
             console.log(`❌ El Serial ${lcLicencia} ya se encuentra quemado/asignado.`);
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
         }
+
+        // Mapeamos dinámicamente si tu columna ID vino en mayúsculas o minúsculas en Postgres
+        const idReal = registroStock.ID !== undefined ? registroStock.ID : registroStock.id;
 
         // 2. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
         const payloadActivacion = {
@@ -466,7 +472,9 @@ app.post('/activar-licencia-online', async (req, res) => {
         }
 
         // 3. QUEMAR EL SERIAL EN TU STOCK DE DISPONIBLES CAMBIANDO EL STATUS A TRUE
-        const urlUpdateStock = SUPABASE_DISP + `?id=eq.${registroStock.id}`;
+        const columnaId = registroStock.ID !== undefined ? 'ID' : 'id';
+        const urlUpdateStock = SUPABASE_DISP + `?${columnaId}=eq.${idReal}`;
+        
         await fetch(urlUpdateStock, {
             method: 'PATCH',
             headers: {
@@ -482,10 +490,11 @@ app.post('/activar-licencia-online', async (req, res) => {
         return res.status(200).json({ activada: true, mensaje: "Licencia activada y registrada de forma exitosa en la nube." });
 
     } catch (error) {
-        console.error("Fallo crítico controlado en protocolo de activación:", error);
+        console.error("Fallo crítico en protocolo de activación:", error);
         return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
     }
 });
+
 
 
 
