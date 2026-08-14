@@ -501,6 +501,119 @@ app.post('/activar-licencia-online', async (req, res) => {
     }
 });
 
+// =====================================================================
+// NUEVO ENDPOINT: EMBUDO DE VALIDACIÓN DIARIA CAPTCHASOLVER (POST)
+// =====================================================================
+app.post('/validar-acceso-diario', async (req, res) => {
+    const { licencia, rif } = req.body;
+
+    // Validación fail-safe básica de escritorio
+    if (!licencia || !rif) {
+        return res.status(400).json({ acceso: false, error: "Licencia y RIF son requeridos para la validación." });
+    }
+
+    try {
+        const lcLicencia = licencia.trim();
+        const lcRif = rif.trim().toUpperCase();
+        console.log(`📡 Solicitud de acceso diario -> Licencia: ${lcLicencia}, RIF: ${lcRif}...`);
+
+        // ---------------------------------------------------------------------
+        // PASO 1: VERIFICAR EN MAESTRO_LICENCIAS_DISPONIBLES (TU STOCK)
+        // ---------------------------------------------------------------------
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        const responseStock = await fetch(urlCheckStock, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const dataStock = await responseStock.json();
+
+        // Candado A: Si no existe en el inventario o status es false (No asignada)
+        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+            console.log(`⛔ Acceso Denegado: Licencia ${lcLicencia} no existe en stock.`);
+            return res.json({ acceso: false, motivo: "INEXISTENTE", error: "Licencia no válida o no ha sido dada de alta." });
+        }
+
+        const registroStock = dataStock;
+        if (registroStock.status !== true) {
+            console.log(`⛔ Acceso Denegado: Licencia ${lcLicencia} no ha sido asignada aún.`);
+            return res.json({ acceso: false, motivo: "NO_ASIGNADA", error: "Esta licencia no se encuentra activada ni asignada en el sistema." });
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 2: VERIFICAR EN MAESTRO_LICENCIAS_ACTIVADAS (CANDADOS CLIENTE)
+        // ---------------------------------------------------------------------
+        // Consultamos la tabla de activadas buscando la combinación exacta de RIF + Licencia
+        const urlCheckActivadas = process.env.SUPABASE_ACTIVADAS + `?and=(licencia.eq.${encodeURIComponent(lcLicencia)},rifasociado.eq.${encodeURIComponent(lcRif)})`;
+        const responseActivadas = await fetch(urlCheckActivadas, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const dataActivadas = await responseActivadas.json();
+
+        // Candado B: ¿Existe el registro de activación para ese RIF?
+        if (!dataActivadas || dataActivadas.length === 0 || !Array.isArray(dataActivadas)) {
+            console.log(`⛔ Acceso Denegado: Licencia ${lcLicencia} no pertenece al RIF ${lcRif}.`);
+            return res.json({ acceso: false, motivo: "RIF_INCORRECTO", error: "La licencia no se encuentra vinculada al RIF suministrado." });
+        }
+
+        const registroCliente = dataActivadas;
+
+        // Candado C: ¿Está activa y NO bloqueada?
+        if (registroCliente.activa !== true || registroCliente.bloqueada === true) {
+            console.log(`⛔ Acceso Denegado: Licencia ${lcLicencia} se encuentra suspendida o bloqueada.`);
+            return res.json({ acceso: false, motivo: "SUSPENDIDA", error: "La licencia se encuentra inactiva o bloqueada por el administrador." });
+        }
+
+        // Candado D: ¿Está vencida? (Comparación cronológica YYYY-MM-DD en la RAM)
+        const hoy = new Date().toISOString().split('T');
+        if (registroCliente.vencimiento) {
+            const fechaVencimiento = new Date(registroCliente.vencimiento).toISOString().split('T');
+            if (hoy > fechaVencimiento) {
+                console.log(`⛔ Acceso Denegado: Licencia ${lcLicencia} expiró el ${fechaVencimiento}.`);
+                return res.json({ acceso: false, motivo: "VENCIDA", error: "La licencia se encuentra vencida. Por favor, renueve su suscripción." });
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 3: TODO OK -> REGISTRAMOS EN TU TABLA HISTORIAL_DE_ACCESOS
+        // ---------------------------------------------------------------------
+        const ipCliente = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "0.0.0.0";
+        const payloadAcceso = {
+            licencia: lcLicencia,
+            rifasociado: lcRif,
+            ipaddress: ipCliente
+        };
+
+        await fetch(process.env.SUPABASE_ACCESOS, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payloadAcceso)
+        });
+
+        // LUZ VERDE ABSOLUTA AL CAPTCHASOLVER
+        console.log(`🚀 ¡LUZ VERDE! Acceso concedido a Licencia: ${lcLicencia}, RIF: ${lcRif}, IP: ${ipCliente}`);
+        return res.status(200).json({ acceso: true, mensaje: "Validación exitosa. Licencia vigente y autorizada." });
+
+    } catch (error) {
+        console.error("Fallo crítico en protocolo de validación diaria:", error);
+        return res.status(200).json({ acceso: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
+    }
+});
 
 
 
