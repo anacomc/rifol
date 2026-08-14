@@ -434,7 +434,7 @@ app.post('/activar-licencia-online', async (req, res) => {
         // Extraemos tu registro real (Fila 0 de la RAM)
         const registroStock = dataStock[0]; 
 
-        // Validamos si ya fue quemada previamente
+        // Validamos si ya fue quemada previamente en tu stock
         if (registroStock.status === true) {
             console.log(`❌ El Serial ${lcLicencia} ya se encuentra quemado/asignado.`);
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
@@ -443,25 +443,21 @@ app.post('/activar-licencia-online', async (req, res) => {
         // Mapeamos tu clave primaria ID (Mayúscula o Minúscula de Postgres)
         const idReal = registroStock.ID !== undefined ? registroStock.ID : registroStock.id;
 
-        // =====================================================================
-        // TRUCO DE HARDWARE: CÁLCULO DINÁMICO DE TU FECHA DE VENCIMIENTO
-        // =====================================================================
-        // Extraemos los años de validez (Tolerante a mayúsculas/minúsculas). Por defecto 1 año.
+        // CÁLCULO DINÁMICO DE TU FECHA DE VENCIMIENTO
         const aniosValidez = registroStock.VALIDEZ !== undefined ? parseInt(registroStock.VALIDEZ) : (registroStock.validez !== undefined ? parseInt(registroStock.validez) : 1);
         
-        // Calculamos la fecha sumando los años exactos en la RAM
         let fechaCalculada = new Date();
         fechaCalculada.setFullYear(fechaCalculada.getFullYear() + aniosValidez);
-        
-        // Formateamos estrictamente a YYYY-MM-DD para tu PostgreSQL de Supabase
         const lcVencimiento = fechaCalculada.toISOString().split('T')[0];
-        console.log(`📅 Licencia válida por ${aniosValidez} año(s). Fecha de Vencimiento calculada: ${lcVencimiento}`);
 
         // 2. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
+        // ¡INYECTADOS TUS NUEVOS CAMPOS LÓGICOS DE CONTROL COMERCIAL!
         const payloadActivacion = {
             licencia: lcLicencia,
             rifasociado: lcRif,
-            vencimiento: lcVencimiento // <-- INYECTAMOS TU NUEVA COLUMNA DE CONTROL
+            vencimiento: lcVencimiento,
+            activa: true,       // Nace habilitada para operar
+            bloqueada: false    // Nace libre de restricciones
         };
 
         const responseActi = await fetch(process.env.SUPABASE_ACTIVADAS, {
@@ -493,7 +489,7 @@ app.post('/activar-licencia-online', async (req, res) => {
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal'
             },
-            body: JSON.stringify({ status: true }) // Quemado perpetuo
+            body: JSON.stringify({ status: true }) // Quemado perpetuo en stock
         });
 
         console.log(`🚀 ¡ÉXITO MULTI-TABLA! Licencia activada legítimamente hasta el ${lcVencimiento}.`);
@@ -504,6 +500,7 @@ app.post('/activar-licencia-online', async (req, res) => {
         return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
     }
 });
+
 
 
 
