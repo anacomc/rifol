@@ -399,7 +399,7 @@ app.post('/registrar-master', async (req, res) => {
     }
 });
 // =====================================================================
-// INDESTRUCTIBLE: ACTIVACIÓN ONLINE EN DOS PASOS (POST PURE)
+// ACTUALIZADO: ACTIVACIÓN ONLINE EN DOS PASOS CON CÁLCULO DE VENCIMIENTO
 // =====================================================================
 app.post('/activar-licencia-online', async (req, res) => {
     const { licencia, rif } = req.body;
@@ -411,11 +411,10 @@ app.post('/activar-licencia-online', async (req, res) => {
     try {
         const lcLicencia = licencia.trim();
         const lcRif = rif.trim().toUpperCase();
-        console.log(`🤖 Protocolo de activación para Licencia: ${lcLicencia}, RIF: ${lcRif}...`);
+        console.log(`🤖 Iniciando protocolo de activación para Licencia: ${lcLicencia}...`);
 
         // 1. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
-        const urlCheckStock = SUPABASE_DISP + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
-        
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
         const responseStock = await fetch(urlCheckStock, {
             method: 'GET',
             headers: {
@@ -427,34 +426,45 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         const dataStock = await responseStock.json();
 
-        // VALIDACIÓN INTEGRAL DE HARDWARE: Si viene vacío, nulo o indefinido
-        if (!dataStock || (Array.isArray(dataStock) && dataStock.length === 0)) {
+        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
             console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
             return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
         }
 
-        // =====================================================================
-        // CONTROL DE REBOTE: SE TRAGA EL REGISTRO TANTO SI ES ARREGLO O OBJETO
-        // =====================================================================
-        // Si dataStock es un Arreglo [], extrae el índice 0; si es un Objeto {}, lo usa directo
-        const registroStock = Array.isArray(dataStock) ? dataStock[0] : dataStock; 
+        // Extraemos tu registro real (Fila 0 de la RAM)
+        const registroStock = dataStock[0]; 
 
-        // Evaluamos el estatus de tu inventario (true = Quemado / Asignado)
+        // Validamos si ya fue quemada previamente
         if (registroStock.status === true) {
             console.log(`❌ El Serial ${lcLicencia} ya se encuentra quemado/asignado.`);
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
         }
 
-        // Mapeamos dinámicamente si tu columna ID vino en mayúsculas o minúsculas en Postgres
+        // Mapeamos tu clave primaria ID (Mayúscula o Minúscula de Postgres)
         const idReal = registroStock.ID !== undefined ? registroStock.ID : registroStock.id;
+
+        // =====================================================================
+        // TRUCO DE HARDWARE: CÁLCULO DINÁMICO DE TU FECHA DE VENCIMIENTO
+        // =====================================================================
+        // Extraemos los años de validez (Tolerante a mayúsculas/minúsculas). Por defecto 1 año.
+        const aniosValidez = registroStock.VALIDEZ !== undefined ? parseInt(registroStock.VALIDEZ) : (registroStock.validez !== undefined ? parseInt(registroStock.validez) : 1);
+        
+        // Calculamos la fecha sumando los años exactos en la RAM
+        let fechaCalculada = new Date();
+        fechaCalculada.setFullYear(fechaCalculada.getFullYear() + aniosValidez);
+        
+        // Formateamos estrictamente a YYYY-MM-DD para tu PostgreSQL de Supabase
+        const lcVencimiento = fechaCalculada.toISOString().split('T')[0];
+        console.log(`📅 Licencia válida por ${aniosValidez} año(s). Fecha de Vencimiento calculada: ${lcVencimiento}`);
 
         // 2. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
         const payloadActivacion = {
             licencia: lcLicencia,
-            rifasociado: lcRif
+            rifasociado: lcRif,
+            vencimiento: lcVencimiento // <-- INYECTAMOS TU NUEVA COLUMNA DE CONTROL
         };
 
-        const responseActi = await fetch(SUPABASE_ACTI, {
+        const responseActi = await fetch(process.env.SUPABASE_ACTIVADAS, {
             method: 'POST',
             headers: {
                 'apikey': SUPABASE_KEY,
@@ -468,12 +478,12 @@ app.post('/activar-licencia-online', async (req, res) => {
         if (!responseActi.ok) {
             const errTxt = await responseActi.text();
             console.error("Supabase rechazó la inserción en activadas:", errTxt);
-            return res.json({ activada: false, error: "La base de datos bloqueó la activación por hardware." });
+            return res.json({ activada: false, error: "La base de datos bloqueó la activación de hardware." });
         }
 
         // 3. QUEMAR EL SERIAL EN TU STOCK DE DISPONIBLES CAMBIANDO EL STATUS A TRUE
         const columnaId = registroStock.ID !== undefined ? 'ID' : 'id';
-        const urlUpdateStock = SUPABASE_DISP + `?${columnaId}=eq.${idReal}`;
+        const urlUpdateStock = process.env.SUPABASE_DISPONIBLES + `?${columnaId}=eq.${idReal}`;
         
         await fetch(urlUpdateStock, {
             method: 'PATCH',
@@ -483,14 +493,14 @@ app.post('/activar-licencia-online', async (req, res) => {
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal'
             },
-            body: JSON.stringify({ status: true }) // Marcada como Asignada para siempre
+            body: JSON.stringify({ status: true }) // Quemado perpetuo
         });
 
-        console.log(`🚀 ¡ÉXITO MULTI-TABLA! Licencia ${lcLicencia} asignada legítimamente al RIF ${lcRif}.`);
-        return res.status(200).json({ activada: true, mensaje: "Licencia activada y registrada de forma exitosa en la nube." });
+        console.log(`🚀 ¡ÉXITO MULTI-TABLA! Licencia activada legítimamente hasta el ${lcVencimiento}.`);
+        return res.status(200).json({ activada: true, mensaje: `Licencia activada y registrada de forma exitosa. Vence el: ${lcVencimiento}` });
 
     } catch (error) {
-        console.error("Fallo crítico en protocolo de activación:", error);
+        console.error("Fallo crítico controlado en protocolo de activación:", error);
         return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
     }
 });
