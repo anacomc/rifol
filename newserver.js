@@ -425,23 +425,32 @@ app.post('/activar-licencia-online', async (req, res) => {
         });
 
         const dataStock = await responseStock.json();
-        // 1. EVALUAMOS SI EL ARREGLO VIENE COMPLETAMENTE VACÍO DE SUPABASE
-        if (!dataStock || dataStock.length === 0) {
-            console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
-            return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
-        }
-        // =====================================================================
-        // TRUCO DE INGENIERÍA: EXTRAEMOS LA FILA CERO SIN USAR CORCHETES
-        // =====================================================================
-        // Usamos .at(0) para obligar a Node.js a leer el primer registro real
-        const registroStock = dataStock.at(0); 
 
-        // Ahora sí, evaluamos el estatus lógico de tu inventario (true = Quemado)
+        // =====================================================================
+        // DIAGNÓSTICO DIGITAL AUTOMÁTICO: LEVANTAMOS LA ALFOMBRA DE LA RAM
+        // =====================================================================
+        // Si entra aquí, te va a devolver en el cuadro de FoxPro/C# el string 
+        // exacto de lo que leyó de Supabase para ver las etiquetas y valores reales.
+        if (!dataStock || dataStock.length === 0 || Array.isArray(dataStock) === false) {
+            console.log(`❌ Alerta de Stock: El servidor no validó el registro.`);
+            
+            // Transformamos el objeto crudo a texto para enviártelo de vuelta
+            const jsonCrudoDeLaRAM = JSON.stringify(dataStock);
+            
+            return res.json({ 
+                activada: false, 
+                motivo: "INEXISTENTE", 
+                error: `Licencia no ubicada. Contenido real de la RAM de Supabase: ${jsonCrudoDeLaRAM}` 
+            });
+        }
+
+        // Si pasa la auditoría, extraemos la primera fila de forma segura
+        const registroStock = Array.isArray(dataStock) ? dataStock[0] : dataStock;
+
         if (registroStock.status === true) {
             console.log(`❌ El Serial ${lcLicencia} ya se encuentra quemado/asignado.`);
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
         }
-
         // 2. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
         const payloadActivacion = {
             licencia: lcLicencia,
