@@ -427,6 +427,10 @@ app.post('/activar-licencia-online', async (req, res) => {
         });
 
         const dataStock = await responseStock.json();
+        const errTxt1 = dataStock[0];
+        console.error("Supabase rechazó la inserción en activadas:", errTxt1);
+        const errTxt2 = dataStock[1];
+        console.error("Supabase rechazó la inserción en activadas:", errTxt2);
 
         // Si el arreglo viene completamente vacío de Supabase (No hubo coincidencia física)
         if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
