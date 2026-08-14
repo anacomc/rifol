@@ -399,7 +399,7 @@ app.post('/registrar-master', async (req, res) => {
     }
 });
 // =====================================================================
-// NUEVO ENDPOINT INDEPENDIENTE: ACTIVACIÓN ONLINE EN DOS PASOS (POST)
+// DEFINITIVO: ACTIVACIÓN ONLINE EN DOS PASOS (POST PURE)
 // =====================================================================
 app.post('/activar-licencia-online', async (req, res) => {
     const { licencia, rif } = req.body;
@@ -415,6 +415,8 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         // 1. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
         const urlCheckStock = SUPABASE_DISP + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        
+        // --- CABECERAS BLINDADAS: IDÉNTICAS A TU VALIDAR-CLAVE GANADOR ---
         const responseStock = await fetch(urlCheckStock, {
             method: 'GET',
             headers: {
@@ -426,27 +428,21 @@ app.post('/activar-licencia-online', async (req, res) => {
 
         const dataStock = await responseStock.json();
 
-        // Si entra aquí, te va a devolver en el cuadro de FoxPro/C# el string 
-        // exacto de lo que leyó de Supabase para ver las etiquetas y valores reales.
-        if (!dataStock || dataStock.length === 0 || Array.isArray(dataStock) === false) {
-            console.log(`❌ Alerta de Stock: El servidor no validó el registro.`);
-            
-            // Transformamos el objeto crudo a texto para enviártelo de vuelta
-            const jsonCrudoDeLaRAM = JSON.stringify(dataStock);
-            return res.json({ 
-                activada: false, 
-                motivo: "INEXISTENTE", 
-                error: `Licencia no ubicada. Contenido real de la RAM de Supabase: ${jsonCrudoDeLaRAM}` 
-            });
+        // Si el arreglo viene completamente vacío de Supabase (No hubo coincidencia física)
+        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+            console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
+            return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
         }
 
-        // Si pasa la auditoría, extraemos la primera fila de forma segura
-        const registroStock = Array.isArray(dataStock) ? dataStock[0] : dataStock;
+        // Extraemos de forma segura el índice cero del arreglo de PostgreSQL
+        const registroStock = dataStock[0]; 
 
+        // Evaluamos si el estatus ya fue quemado (true = Asignado)
         if (registroStock.status === true) {
             console.log(`❌ El Serial ${lcLicencia} ya se encuentra quemado/asignado.`);
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya fue activada previamente por otro usuario." });
         }
+
         // 2. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS
         const payloadActivacion = {
             licencia: lcLicencia,
@@ -491,6 +487,7 @@ app.post('/activar-licencia-online', async (req, res) => {
         return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
     }
 });
+
 
 
 //**************************************************************************************************************************************
