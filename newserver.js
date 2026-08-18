@@ -987,9 +987,9 @@ app.post('/validar-acceso-diarioA', async (req, res) => {
 
 
 // =====================================================================
-// ENDPOINT CORREGIDO: GENERACIÓN ONLINE DE LICENCIA CRYPTO XML-COMPATIBLE (POST)
+// DEFINITIVO: GENERACIÓN ONLINE DE LICENCIA CON AUDITORÍA DE STOCK (POST)
 // =====================================================================
-app.post('/generar-licencia-online', (req, res) => {
+app.post('/generar-licencia-online', async (req, res) => {
     const { lcRif, lcNombre, lcLic, lcFin } = req.body;
 
     if (!lcRif || !lcNombre || !lcLic || !lcFin) {
@@ -997,26 +997,56 @@ app.post('/generar-licencia-online', (req, res) => {
     }
 
     try {
-        // 1. REPLICAMOS AL 100% TU CADENA DE DATOS LOCAL CON TUS ESPACIOS EXACTOS
-        const licenseData = "rif: " + lcRif.trim() + ";" + "nombre: " + lcNombre.trim() + ";" + "licencia: " + lcLic.trim() + ";" + "expira: " + lcFin.trim() + ";";
-        console.log("🔐 Firmando datos en la nube: " + licenseData);
+        const lcLicenciaAValidar = lcLic.trim();
+        console.log("📡 Auditando inventario en Supabase para el Serial: " + lcLicenciaAValidar + "...");
 
-        const dataBytes = Buffer.from(licenseData, 'utf8');
+        // ---------------------------------------------------------------------
+        // NUEVO: INTERROGAMOS A TU TABLA DE DISPONIBLES EN SUPABASE
+        // ---------------------------------------------------------------------
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + "?licencia=eq." + encodeURIComponent(lcLicenciaAValidar);
+        const responseStock = await fetch(urlCheckStock, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
 
-        // 2. EXTRAEMOS TU LLAVE PRIVADA EN FORMATO XML DESDE EL PANEL DE RENDER
-        const xmlPrivateKey = process.env.RSA_PRIVATE_KEY;
-        if (!xmlPrivateKey) {
-            return res.status(500).json({ exito: false, error: "Llave privada RSA_PRIVATE_KEY ausente en el panel de Render." });
+        const dataStock = await responseStock.json();
+
+        // Candado 1: El serial no existe en tus lotes dados de alta
+        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+            console.log("⛔ FRAUDE DETECTADO: El emisor intentó firmar una licencia inexistente: " + lcLicenciaAValidar);
+            return res.json({ exito: false, error: "Operación rechazada: El número de licencia no existe en el inventario maestro." });
+        }
+
+        const registroStock = dataStock;
+
+        // Candado 2: La licencia ya fue vendida y consumió todos sus asientos en el pasado
+        if (registroStock.status === true) {
+            console.log("⛔ FRAUDE DETECTADO: El emisor intentó re-vender una licencia ya agotada: " + lcLicenciaAValidar);
+            return res.json({ exito: false, error: "Operación rechazada: Esta licencia ya fue asignada previamente y no tiene cupos libres." });
         }
 
         // =====================================================================
-        // REMACHE MAESTRO DE HARDWARE: EXTRACTOR DE TEXTO XML CORREGIDO INDESTRUCTIBLE
+        // SI PASÓ LOS DOS CANDADOS: PROCEDEMOS CON EL SELLADO ASIMÉTRICO RSA
         // =====================================================================
+        const licenseData = "rif: " + lcRif.trim() + ";" + "nombre: " + lcNombre.trim() + ";" + "licencia: " + lcLicenciaAValidar + ";" + "expira: " + lcFin.trim() + ";";
+        console.log("🔐 Generando sello criptográfico para: " + licenseData);
+
+        const dataBytes = Buffer.from(licenseData, 'utf8');
+        const xmlPrivateKey = process.env.RSA_PRIVATE_KEY;
+
+        if (!xmlPrivateKey) {
+            return res.status(500).json({ exito: false, error: "Llave privada RSA_PRIVATE_KEY ausente en Render." });
+        }
+
+        // Extractor indexado síncrono del XML de .NET
         const extractField = (field) => {
             const regex = new RegExp("<" + field + ">([^<]+)</" + field + ">");
             const match = xmlPrivateKey.match(regex);
-            // Extraemos estrictamente el texto capturado en el índice 1 del regex
-            return match && match[1] ? match[1].trim() : null;
+            return match && match ? match.trim() : null;
         };
 
         const modulus = extractField("Modulus");
@@ -1028,19 +1058,11 @@ app.post('/generar-licencia-online', (req, res) => {
         const dq = extractField("DQ");
         const qi = extractField("InverseQ");
 
-        // Fail-safe por si la llave privada copiada en Render está incompleta
         if (!modulus || !d || !exponent || !p || !q || !dp || !dq || !qi) {
-            console.error("❌ Estructura XML RSA corrupta o incompleta en variables de entorno.");
-            return res.status(500).json({ 
-                exito: false, 
-                error: "La llave RSA_PRIVATE_KEY en Render no contiene todos los campos XML necesarios de .NET." 
-            });
+            return res.status(500).json({ exito: false, error: "Estructura XML de la llave privada corrupta en Render." });
         }
 
-        // =====================================================================
-        // CORREGIDO: TRADUCTOR DE LLAVE XML DE MICROSOFT A JWK (BASE64URL STRINGS)
-        // =====================================================================
-        // Convertimos los componentes Base64 del XML de .NET a base64url strings para JWK
+        // Traductor nativo a base64url strings para JWK
         const toBase64Url = (base64Str) => {
             return Buffer.from(base64Str, 'base64').toString('base64url');
         };
@@ -1060,31 +1082,29 @@ app.post('/generar-licencia-online', (req, res) => {
             format: 'jwk'
         });
 
-        // 4. DISPARAMOS EL SELLADO CRIPTOGRÁFICO ASIMÉTRICO RSA-SHA256
+        // Ejecutamos el firmado digital
         const firmador = crypto.createSign('RSA-SHA256');
         firmador.update(dataBytes);
         firmador.end();
         const signatureBytes = firmador.sign(rsaPrivateKeyPem);
 
-        // 5. EMBALAMOS EL CONTENIDO CLONANDO TU ESTRUCTURA SEPARADA POR EL PUNTO
         const base64Data = dataBytes.toString('base64');
         const base64Signature = signatureBytes.toString('base64');
-        
         const licenseFileContent = base64Data + "." + base64Signature;
-        console.log("✅ ¡Licencia criptográfica unificada generada con éxito en la nube!");
 
-        // Devolvemos el JSON de respuesta exitosa
+        console.log("✅ Licencia firmada con éxito. Verificada contra inventario.");
+
         return res.status(200).json({
             exito: true,
             licenseFileContent: licenseFileContent
         });
 
-
     } catch (error) {
-        console.error("❌ Fallo crítico controlado en el motor criptográfico de Render:", error);
-        return res.status(500).json({ exito: false, error: "Error en el soplete del servidor: " + error.message });
+        console.error("❌ Fallo crítico en el soplete criptográfico de Render:", error);
+        return res.status(500).json({ exito: false, error: "Error en el servidor: " + error.message });
     }
 });
+
 
 
 //**************************************************************************************************************************************
