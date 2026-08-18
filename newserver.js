@@ -765,7 +765,6 @@ app.post('/validar-acceso-diario', async (req, res) => {
 // 1. EMBUDO DE ACTIVACIÓN MULTI-ESTACIÓN CON ANCLA DE HARDWARE (POST)
 // =====================================================================
 app.post('/activar-licencia-onlineA', async (req, res) => {
-    // Recibimos la licencia, el RIF y el Nombre de la Computadora desde FoxPro/C#
     const { licencia, rif, nombre_pc } = req.body;
 
     if (!licencia || !rif || !nombre_pc) {
@@ -775,22 +774,18 @@ app.post('/activar-licencia-onlineA', async (req, res) => {
     try {
         const lcLicencia = licencia.trim();
         const lcRifBase = rif.trim().toUpperCase();
-        const lcNombrePc = nombre_pc.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, ""); // Limpieza de caracteres raros
+        const lcNombrePc = nombre_pc.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
         
-        // --- LA CADENA COMBINADA DE ANCLA ---
-        const lcRifCombinado = `${lcRifBase}-${lcNombrePc}`;
+        // Cadena combinada de ancla única por máquina
+        const lcRifCombinado = lcRifBase + "-" + lcNombrePc;
         
-        console.log(`🤖 Evaluando cupos para Licencia: ${lcLicencia}, Estación: ${lcRifCombinado}...`);
+        console.log("🤖 Evaluando cupos para Licencia: " + lcLicencia + ", Estación: " + lcRifCombinado + "...");
 
         // A. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
-        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + "?licencia=eq." + encodeURIComponent(lcLicencia);
         const responseStock = await fetch(urlCheckStock, {
             method: 'GET',
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': "Bearer " + SUPABASE_KEY,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json' }
         });
 
         const dataStock = await responseStock.json();
@@ -799,35 +794,49 @@ app.post('/activar-licencia-onlineA', async (req, res) => {
             return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
         }
 
-        const registroStock = dataStock[0]; 
+        const registroStock = dataStock; 
 
-        // Candado general: Si ya se agotó el stock por completo
         if (registroStock.status === true) {
             return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya alcanzó el máximo de activaciones permitidas." });
         }
 
         const maxEstaciones = registroStock.limite_estaciones !== undefined ? parseInt(registroStock.limite_estaciones) : 1;
 
-        // B. CONTAMOS CUÁNTOS ASIENTOS TIENE OCUPADOS ESTE SERIAL ACTUALMENTE
-        const urlCountActivadas = process.env.SUPABASE_ACTIVADAS + `?licencia=eq.${encodeURIComponent(lcLicencia)}&select=count`;
+        // =====================================================================
+        // TRUCO DE HARDWARE: VALIDAMOS SI ESTA PC ESPECÍFICA YA ESTÁ ACTIVADA
+        // =====================================================================
+        const urlCheckDuplicado = process.env.SUPABASE_ACTIVADAS + "?and=(licencia.eq." + encodeURIComponent(lcLicencia) + ",rifasociado.eq." + encodeURIComponent(lcRifCombinado) + ")";
+        const responseDuplicado = await fetch(urlCheckDuplicado, {
+            method: 'GET',
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json' }
+        });
+        const dataDuplicado = await responseDuplicado.json();
+
+        // ¡EL REBOTE DE DUPLICIDAD! Si esta PC ya existe, le damos luz verde comercial sin gastar cupo
+        if (dataDuplicado && dataDuplicado.length > 0 && Array.isArray(dataDuplicado)) {
+            console.log("⚠️ La estación [" + lcRifCombinado + "] ya estaba registrada. Devolviendo pase exitoso sin duplicar fila.");
+            return res.status(200).json({ 
+                activada: true, 
+                mensaje: "Esta computadora ya se encuentra activada legítimamente en el sistema." 
+            });
+        }
+
+        // B. CONTAMOS CUÁNTOS ASIENTOS TIENE OCUPADOS ESTE SERIAL ACTUALMENTE (A NIVEL GLOBAL)
+        const urlCountActivadas = process.env.SUPABASE_ACTIVADAS + "?licencia=eq." + encodeURIComponent(lcLicencia) + "&select=count";
         const responseCount = await fetch(urlCountActivadas, {
             method: 'GET',
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': "Bearer " + SUPABASE_KEY,
-                'Prefer': 'count=exact'
-            }
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Prefer': 'count=exact' }
         });
 
         const rangoCabecera = responseCount.headers.get('content-range') || "";
         let activacionesActuales = 0;
         if (rangoCabecera.includes('/')) {
-            activacionesActuales = parseInt(rangoCabecera.split('/')[1]) || 0;
+            activacionesActuales = parseInt(rangoCabecera.split('/')) || 0;
         }
 
-        console.log(`📊 Cuota Actual: [${activacionesActuales} de ${maxEstaciones}] asientos ocupados.`);
+        console.log("📊 Cuota Global Actual: [" + activacionesActuales + " de " + maxEstaciones + "] asientos ocupados.");
 
-        // Candado Comercial: Si ya igualamos la cuota, portazo por volumen
+        // Candado Comercial: Si ya igualamos la cuota global, portazo por volumen
         if (activacionesActuales >= maxEstaciones) {
             return res.json({ activada: false, motivo: "CUOTA_EXCEDIDA", error: "Límite de activaciones alcanzado para esta licencia. Adquiera más asientos." });
         }
@@ -836,12 +845,12 @@ app.post('/activar-licencia-onlineA', async (req, res) => {
         const aniosValidez = registroStock.validez !== undefined ? parseInt(registroStock.validez) : 1;
         let fechaCalculada = new Date();
         fechaCalculada.setFullYear(fechaCalculada.getFullYear() + aniosValidez);
-        const lcVencimiento = fechaCalculada.toISOString().split('T')[0];
+        const lcVencimiento = fechaCalculada.toISOString().split('T');
 
-        // C. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS (Guardamos la cadena combinada)
+        // C. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS (Guardamos el asiento)
         const payloadActivacion = {
             licencia: lcLicencia,
-            rifasociado: lcRifCombinado, // <-- AQUÍ SE ANCLA EL HARDWARE CON EL RIF
+            rifasociado: lcRifCombinado, 
             vencimiento: lcVencimiento,
             activa: true,
             bloqueada: false
@@ -849,12 +858,7 @@ app.post('/activar-licencia-onlineA', async (req, res) => {
 
         const responseActi = await fetch(process.env.SUPABASE_ACTIVADAS, {
             method: 'POST',
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': "Bearer " + SUPABASE_KEY,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            },
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
             body: JSON.stringify(payloadActivacion)
         });
 
@@ -865,20 +869,17 @@ app.post('/activar-licencia-onlineA', async (req, res) => {
         // D. QUEMAR EL STOCK ÚNICAMENTE SI ACABAMOS DE LLENAR EL ÚLTIMO CUPO CONTRATADO
         if ((activacionesActuales + 1) >= maxEstaciones) {
             const idReal = registroStock.id !== undefined ? registroStock.id : registroStock.ID;
-            const urlUpdateStock = process.env.SUPABASE_DISPONIBLES + `?id=eq.${idReal}`;
+            const urlUpdateStock = process.env.SUPABASE_DISPONIBLES + "?id=eq." + idReal;
             await fetch(urlUpdateStock, {
                 method: 'PATCH',
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': "Bearer " + SUPABASE_KEY,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'return=minimal'
-                },
+                headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
                 body: JSON.stringify({ status: true })
             });
+            console.log("🔒 Licencia [" + lcLicencia + "] agotó todos sus cupos contratados.");
         }
 
-        return res.status(200).json({ activada: true, mensaje: `Licencia activada con éxito. Estación registrada.` });
+        console.log("🚀 ¡ÉXITO MULTI-ESTACIÓN! Nueva activación registrada. Asientos: [" + (activacionesActuales + 1) + "/" + maxEstaciones + "]");
+        return res.status(200).json({ activada: true, mensaje: "Licencia activada con éxito. Estación registrada." });
 
     } catch (error) {
         return res.status(200).json({ activada: false, error: "Error en la ráfaga de activación: " + error.message });
