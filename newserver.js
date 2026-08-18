@@ -761,6 +761,219 @@ app.post('/validar-acceso-diario', async (req, res) => {
         return res.status(200).json({ acceso: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
     }
 });
+// =====================================================================
+// 1. EMBUDO DE ACTIVACIÓN MULTI-ESTACIÓN CON ANCLA DE HARDWARE (POST)
+// =====================================================================
+app.post('/activar-licencia-onlineA', async (req, res) => {
+    // Recibimos la licencia, el RIF y el Nombre de la Computadora desde FoxPro/C#
+    const { licencia, rif, nombre_pc } = req.body;
+
+    if (!licencia || !rif || !nombre_pc) {
+        return res.status(400).json({ activada: false, error: "Licencia, RIF y Nombre de PC son obligatorios." });
+    }
+
+    try {
+        const lcLicencia = licencia.trim();
+        const lcRifBase = rif.trim().toUpperCase();
+        const lcNombrePc = nombre_pc.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, ""); // Limpieza de caracteres raros
+        
+        // --- LA CADENA COMBINADA DE ANCLA ---
+        const lcRifCombinado = `${lcRifBase}-${lcNombrePc}`;
+        
+        console.log(`🤖 Evaluando cupos para Licencia: ${lcLicencia}, Estación: ${lcRifCombinado}...`);
+
+        // A. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        const responseStock = await fetch(urlCheckStock, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const dataStock = await responseStock.json();
+
+        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+            return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
+        }
+
+        const registroStock = dataStock[0]; 
+
+        // Candado general: Si ya se agotó el stock por completo
+        if (registroStock.status === true) {
+            return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya alcanzó el máximo de activaciones permitidas." });
+        }
+
+        const maxEstaciones = registroStock.limite_estaciones !== undefined ? parseInt(registroStock.limite_estaciones) : 1;
+
+        // B. CONTAMOS CUÁNTOS ASIENTOS TIENE OCUPADOS ESTE SERIAL ACTUALMENTE
+        const urlCountActivadas = process.env.SUPABASE_ACTIVADAS + `?licencia=eq.${encodeURIComponent(lcLicencia)}&select=count`;
+        const responseCount = await fetch(urlCountActivadas, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Prefer': 'count=exact'
+            }
+        });
+
+        const rangoCabecera = responseCount.headers.get('content-range') || "";
+        let activacionesActuales = 0;
+        if (rangoCabecera.includes('/')) {
+            activacionesActuales = parseInt(rangoCabecera.split('/')[1]) || 0;
+        }
+
+        console.log(`📊 Cuota Actual: [${activacionesActuales} de ${maxEstaciones}] asientos ocupados.`);
+
+        // Candado Comercial: Si ya igualamos la cuota, portazo por volumen
+        if (activacionesActuales >= maxEstaciones) {
+            return res.json({ activada: false, motivo: "CUOTA_EXCEDIDA", error: "Límite de activaciones alcanzado para esta licencia. Adquiera más asientos." });
+        }
+
+        // CÁLCULO DINÁMICO DE TU FECHA DE VENCIMIENTO
+        const aniosValidez = registroStock.validez !== undefined ? parseInt(registroStock.validez) : 1;
+        let fechaCalculada = new Date();
+        fechaCalculada.setFullYear(fechaCalculada.getFullYear() + aniosValidez);
+        const lcVencimiento = fechaCalculada.toISOString().split('T')[0];
+
+        // C. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS (Guardamos la cadena combinada)
+        const payloadActivacion = {
+            licencia: lcLicencia,
+            rifasociado: lcRifCombinado, // <-- AQUÍ SE ANCLA EL HARDWARE CON EL RIF
+            vencimiento: lcVencimiento,
+            activa: true,
+            bloqueada: false
+        };
+
+        const responseActi = await fetch(process.env.SUPABASE_ACTIVADAS, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payloadActivacion)
+        });
+
+        if (!responseActi.ok) {
+            return res.json({ activada: false, error: "La base de datos bloqueó la activación por hardware." });
+        }
+
+        // D. QUEMAR EL STOCK ÚNICAMENTE SI ACABAMOS DE LLENAR EL ÚLTIMO CUPO CONTRATADO
+        if ((activacionesActuales + 1) >= maxEstaciones) {
+            const idReal = registroStock.id !== undefined ? registroStock.id : registroStock.ID;
+            const urlUpdateStock = process.env.SUPABASE_DISPONIBLES + `?id=eq.${idReal}`;
+            await fetch(urlUpdateStock, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': "Bearer " + SUPABASE_KEY,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ status: true })
+            });
+        }
+
+        return res.status(200).json({ activada: true, mensaje: `Licencia activada con éxito. Estación registrada.` });
+
+    } catch (error) {
+        return res.status(200).json({ activada: false, error: "Error en la ráfaga de activación: " + error.message });
+    }
+});
+
+
+// =====================================================================
+// 2. EMBUDO DE VALIDACIÓN DIARIA CAPTCHASOLVER CON FILTRO DE NODO (POST)
+// =====================================================================
+app.post('/validar-acceso-diarioA', async (req, res) => {
+    const { licencia, rif, nombre_pc } = req.body;
+
+    if (!licencia || !rif || !nombre_pc) {
+        return res.status(400).json({ acceso: false, error: "Licencia, RIF y Nombre de PC son requeridos." });
+    }
+
+    try {
+        const lcLicencia = licencia.trim();
+        const lcRifBase = rif.trim().toUpperCase();
+        const lcNombrePc = nombre_pc.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+        
+        // Armamos la misma ancla exacta para interrogar a Supabase
+        const lcRifCombinado = `${lcRifBase}-${lcNombrePc}`;
+        
+        console.log(`📡 Solicitud de acceso diario -> Licencia: ${lcLicencia}, Estación: ${lcRifCombinado}...`);
+
+        // PASO 1: VERIFICAR EN STOCK DE DISPONIBLES
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        const responseStock = await fetch(urlCheckStock, {
+            method: 'GET',
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json' }
+        });
+        const dataStock = await responseStock.json();
+
+        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+            return res.json({ acceso: false, motivo: "INEXISTENTE", error: "Licencia no válida o no ha sido dada de alta." });
+        }
+
+        const registroStock = dataStock[0];
+        if (registroStock.status !== true) {
+            return res.json({ acceso: false, motivo: "NO_ASIGNADA", error: "Esta licencia no se encuentra activada ni asignada en el sistema." });
+        }
+
+        // PASO 2: VERIFICAR EN MAESTRO_LICENCIAS_ACTIVADAS (CANDADO ESTRICTO DE ESTACIÓN)
+        // Filtramos por la Licencia AND la cadena combinada exacta (RIF-NombrePC)
+        const urlCheckActivadas = process.env.SUPABASE_ACTIVADAS + `?and=(licencia.eq.${encodeURIComponent(lcLicencia)},rifasociado.eq.${encodeURIComponent(lcRifCombinado)})`;
+        const responseActivadas = await fetch(urlCheckActivadas, {
+            method: 'GET',
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json' }
+        });
+        const dataActivadas = await responseActivadas.json();
+
+        // ¡EL PORTAZO A LA SEXTA MÁQUINA! Si la PC actual no está registrada para esa licencia
+        if (!dataActivadas || dataActivadas.length === 0 || !Array.isArray(dataActivadas)) {
+            console.log(`⛔ Acceso Denegado: Estación [${lcRifCombinado}] no autorizada para esta licencia.`);
+            return res.json({ acceso: false, motivo: "RIF_INCORRECTO", error: "Esta computadora no está registrada en el sistema para usar esta licencia." });
+        }
+
+        const registroCliente = dataActivadas[0];
+
+        // Candado C: Estatus administrativo
+        if (registroCliente.activa !== true || registroCliente.bloqueada === true) {
+            return res.json({ acceso: false, motivo: "SUSPENDIDA", error: "La licencia se encuentra inactiva o bloqueada por el administrador." });
+        }
+
+        // Candado D: Vigencia cronológica
+        const hoy = new Date().toISOString().split('T')[0];
+        if (registroCliente.vencimiento) {
+            if (hoy > registroCliente.vencimiento) {
+                return res.json({ acceso: false, motivo: "VENCIDA", error: "La licencia se encuentra vencida. Por favor, renueve su suscripción." });
+            }
+        }
+
+        // PASO 3: TODO EN ORDEN -> REGISTRAMOS LA BITÁCORA CON EL NODO ESPECÍFICO
+        const ipCliente = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "0.0.0.0";
+        const payloadAcceso = {
+            licencia: lcLicencia,
+            rifasociado: lcRifCombinado, // Estampamos RIF-NombrePC en el historial
+            ipaddress: ipCliente
+        };
+
+        await fetch(process.env.SUPABASE_ACCESOS, {
+            method: 'POST',
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify(payloadAcceso)});
+            console.log(🚀 ¡LUZ VERDE! Acceso concedido a Estación: ${lcRifCombinado});
+            return 
+         res.status(200).json({ acceso: true, mensaje: "Validación exitosa. Licencia autorizada." });
+         } 
+         catch (error) {
+            return res.status(200).json({ acceso: false, error: "Error en protocolo de validación: " + error.message });
+         }
+      });
+            
 
 
 
