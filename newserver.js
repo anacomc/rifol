@@ -983,6 +983,93 @@ app.post('/validar-acceso-diarioA', async (req, res) => {
     }
 });
             
+const crypto = require('crypto');
+
+// =====================================================================
+// ENDPOINT SUPREMO: GENERACIÓN ONLINE DE LICENCIA CRYPTO XML-COMPATIBLE (POST)
+// =====================================================================
+app.post('/generar-licencia-online', (req, res) => {
+    const { lcRif, lcNombre, lcLic, lcFin } = req.body;
+
+    if (!lcRif || !lcNombre || !lcLic || !lcFin) {
+        return res.status(400).json({ exito: false, error: "Faltan parámetros obligatorios en la ráfaga emisor." });
+    }
+
+    try {
+        // 1. REPLICAMOS AL 100% TU CADENA DE DATOS LOCAL CON TUS ESPACIOS EXACTOS
+        const licenseData = "rif: " + lcRif.trim() + ";" + "nombre: " + lcNombre.trim() + ";" + "licencia: " + lcLic.trim() + ";" + "expira: " + lcFin.trim() + ";";
+        console.log("🔐 Firmando datos en la nube: " + licenseData);
+
+        // Convertimos el texto de la licencia a un buffer binario UTF-8
+        const dataBytes = Buffer.from(licenseData, 'utf8');
+
+        // 2. EXTRAEMOS TU LLAVE PRIVADA EN FORMATO XML DESDE EL PANEL DE RENDER
+        const xmlPrivateKey = process.env.RSA_PRIVATE_KEY;
+        if (!xmlPrivateKey) {
+            return res.status(500).json({ exito: false, error: "Llave privada RSA_PRIVATE_KEY ausente en Render." });
+        }
+
+        // 3. TRUCO DE HARDWARE: TRADUCTOR DE LLAVE XML DE MICROSOFT A PEM DE NODE.JS
+        // Extraemos los bloques binarios que necesita el motor de OpenSSL usando expresiones regulares limpias
+        const extractField = (field) => {
+            const regex = new RegExp("<" + field + ">([^<]+)</" + field + ">");
+            const match = xmlPrivateKey.match(regex);
+            return match ? match[1] : null;
+        };
+
+        const modulus = extractField("Modulus");
+        const exponent = extractField("Exponent");
+        const d = extractField("D");
+        const p = extractField("P");
+        const q = extractField("Q");
+        const dp = extractField("DP");
+        const dq = extractField("DQ");
+        const qi = extractField("InverseQ");
+
+        if (!modulus || !d) {
+            return res.status(500).json({ exito: false, error: "El string de la llave privada no tiene un formato XML RSA de .NET válido." });
+        }
+
+        // Empaquetamos la estructura de hardware en formato ASN.1 nativo para que Node la trague sin librerías
+        const rsaPrivateKeyPem = crypto.createPrivateKey({
+            key: {
+                kty: 'RSA',
+                n: Buffer.from(modulus, 'base64'),
+                e: Buffer.from(exponent, 'base64'),
+                d: Buffer.from(d, 'base64'),
+                p: Buffer.from(p, 'base64'),
+                q: Buffer.from(q, 'base64'),
+                dp: Buffer.from(dp, 'base64'),
+                dq: Buffer.from(dq, 'base64'),
+                qi: Buffer.from(qi, 'base64')
+            },
+            format: 'jwk'
+        });
+
+        // 4. DISPARAMOS EL SELLADO CRIPTOGRÁFICO CON EL MAPEO SHA256 EXACTO
+        const firmador = crypto.createSign('RSA-SHA256');
+        firmador.update(dataBytes);
+        firmador.end();
+        const signatureBytes = firmador.sign(rsaPrivateKeyPem);
+
+        // 5. EMBALAMOS EL CONTENIDO CLONANDO TU ESTRUCTURA SEPARADA POR EL PUNTO
+        const base64Data = dataBytes.toString('base64');
+        const base64Signature = signatureBytes.toString('base64');
+        
+        const licenseFileContent = base64Data + "." + base64Signature;
+        console.log("✅ ¡Licencia criptográfica unificada generada con éxito!");
+
+        // Devolvemos el texto listo para ser inyectado directo al disco del cliente
+        return res.status(200).json({
+            exito: true,
+            licenseFileContent: licenseFileContent
+        });
+
+    } catch (error) {
+        console.error("❌ Fallo en el motor criptográfico de Render:", error);
+        return res.status(500).json({ exito: false, error: "Error en el soplete del servidor: " + error.message });
+    }
+});
 
             
 
