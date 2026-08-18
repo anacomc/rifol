@@ -986,7 +986,7 @@ app.post('/validar-acceso-diarioA', async (req, res) => {
 const crypto = require('crypto');
 
 // =====================================================================
-// ENDPOINT SUPREMO: GENERACIÓN ONLINE DE LICENCIA CRYPTO XML-COMPATIBLE (POST)
+// ENDPOINT CORREGIDO: GENERACIÓN ONLINE DE LICENCIA CRYPTO XML-COMPATIBLE (POST)
 // =====================================================================
 app.post('/generar-licencia-online', (req, res) => {
     const { lcRif, lcNombre, lcLic, lcFin } = req.body;
@@ -1000,21 +1000,22 @@ app.post('/generar-licencia-online', (req, res) => {
         const licenseData = "rif: " + lcRif.trim() + ";" + "nombre: " + lcNombre.trim() + ";" + "licencia: " + lcLic.trim() + ";" + "expira: " + lcFin.trim() + ";";
         console.log("🔐 Firmando datos en la nube: " + licenseData);
 
-        // Convertimos el texto de la licencia a un buffer binario UTF-8
         const dataBytes = Buffer.from(licenseData, 'utf8');
 
         // 2. EXTRAEMOS TU LLAVE PRIVADA EN FORMATO XML DESDE EL PANEL DE RENDER
         const xmlPrivateKey = process.env.RSA_PRIVATE_KEY;
         if (!xmlPrivateKey) {
-            return res.status(500).json({ exito: false, error: "Llave privada RSA_PRIVATE_KEY ausente en Render." });
+            return res.status(500).json({ exito: false, error: "Llave privada RSA_PRIVATE_KEY ausente en el panel de Render." });
         }
 
-        // 3. TRUCO DE HARDWARE: TRADUCTOR DE LLAVE XML DE MICROSOFT A PEM DE NODE.JS
-        // Extraemos los bloques binarios que necesita el motor de OpenSSL usando expresiones regulares limpias
+        // =====================================================================
+        // REMACHE MAESTRO DE HARDWARE: EXTRACTOR DE TEXTO XML CORREGIDO INDESTRUCTIBLE
+        // =====================================================================
         const extractField = (field) => {
             const regex = new RegExp("<" + field + ">([^<]+)</" + field + ">");
             const match = xmlPrivateKey.match(regex);
-            return match ? match[1] : null;
+            // Extraemos estrictamente el texto capturado en el índice 1 del regex
+            return match && match[1] ? match[1].trim() : null;
         };
 
         const modulus = extractField("Modulus");
@@ -1026,11 +1027,16 @@ app.post('/generar-licencia-online', (req, res) => {
         const dq = extractField("DQ");
         const qi = extractField("InverseQ");
 
-        if (!modulus || !d) {
-            return res.status(500).json({ exito: false, error: "El string de la llave privada no tiene un formato XML RSA de .NET válido." });
+        // Fail-safe por si la llave privada copiada en Render está incompleta
+        if (!modulus || !d || !exponent || !p || !q || !dp || !dq || !qi) {
+            console.error("❌ Estructura XML RSA corrupta o incompleta en variables de entorno.");
+            return res.status(500).json({ 
+                exito: false, 
+                error: "La llave RSA_PRIVATE_KEY en Render no contiene todos los campos XML necesarios de .NET." 
+            });
         }
 
-        // Empaquetamos la estructura de hardware en formato ASN.1 nativo para que Node la trague sin librerías
+        // Convertimos los componentes Base64 del XML de Microsoft a JWK nativo de OpenSSL
         const rsaPrivateKeyPem = crypto.createPrivateKey({
             key: {
                 kty: 'RSA',
@@ -1046,7 +1052,7 @@ app.post('/generar-licencia-online', (req, res) => {
             format: 'jwk'
         });
 
-        // 4. DISPARAMOS EL SELLADO CRIPTOGRÁFICO CON EL MAPEO SHA256 EXACTO
+        // 4. DISPARAMOS EL SELLADO CRIPTOGRÁFICO ASIMÉTRICO RSA-SHA256
         const firmador = crypto.createSign('RSA-SHA256');
         firmador.update(dataBytes);
         firmador.end();
@@ -1057,19 +1063,20 @@ app.post('/generar-licencia-online', (req, res) => {
         const base64Signature = signatureBytes.toString('base64');
         
         const licenseFileContent = base64Data + "." + base64Signature;
-        console.log("✅ ¡Licencia criptográfica unificada generada con éxito!");
+        console.log("✅ ¡Licencia criptográfica unificada generada con éxito en la nube!");
 
-        // Devolvemos el texto listo para ser inyectado directo al disco del cliente
+        // Devolvemos el JSON de respuesta exitosa
         return res.status(200).json({
             exito: true,
             licenseFileContent: licenseFileContent
         });
 
     } catch (error) {
-        console.error("❌ Fallo en el motor criptográfico de Render:", error);
+        console.error("❌ Fallo crítico controlado en el motor criptográfico de Render:", error);
         return res.status(500).json({ exito: false, error: "Error en el soplete del servidor: " + error.message });
     }
 });
+
 
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
