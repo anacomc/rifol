@@ -500,6 +500,142 @@ app.post('/activar-licencia-online', async (req, res) => {
         return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
     }
 });
+// =====================================================================
+// DEFINITIVO: ACTIVACIÓN ONLINE MULTI-ESTACIÓN (POST PURE)
+// =====================================================================
+app.post('/activar-licencia-online_', async (req, res) => {
+    const { licencia, rif } = req.body;
+
+    if (!licencia || !rif) {
+        return res.status(400).json({ activada: false, error: "El Serial de Licencia y el RIF son obligatorios." });
+    }
+
+    try {
+        const lcLicencia = licencia.trim();
+        const lcRif = rif.trim().toUpperCase();
+        console.log(`🤖 Evaluando cupos multi-estación para Licencia: ${lcLicencia}, RIF: ${lcRif}...`);
+
+        // 1. VERIFICAR QUE EL SERIAL EXISTA EN TU STOCK DE DISPONIBLES
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        const responseStock = await fetch(urlCheckStock, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const dataStock = await responseStock.json();
+
+        if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+            console.log(`❌ El Serial ${lcLicencia} no existe en el Maestro de Disponibles.`);
+            return res.json({ activada: false, motivo: "INEXISTENTE", error: "El número de licencia proporcionado no es válido." });
+        }
+
+        // Extraemos tu registro real (Fila 0 de la RAM)
+        const registroStock = dataStock[0]; 
+
+        // Si el estatus general en el stock ya fue quemado a true, cortamos de inmediato
+        if (registroStock.status === true) {
+            console.log(`❌ El Serial ${lcLicencia} ya se encuentra totalmente agotado en cupos.`);
+            return res.json({ activada: false, motivo: "YA_ASIGNADO", error: "Esta licencia ya alcanzó el máximo de activaciones permitidas." });
+        }
+
+        // Extraemos el límite de estaciones (si no existe la columna o está nula, por defecto es 1)
+        const maxEstaciones = registroStock.limite_estaciones !== undefined ? parseInt(registroStock.limite_estaciones) : 1;
+
+        // ---------------------------------------------------------------------
+        // PASO EXTRA: CONTAMOS CUÁNTOS ASIENTOS YA TIENE OCUPADOS ESTE SERIAL
+        // ---------------------------------------------------------------------
+        const urlCountActivadas = process.env.SUPABASE_ACTIVADAS + `?licencia=eq.${encodeURIComponent(lcLicencia)}&select=count`;
+        const responseCount = await fetch(urlCountActivadas, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Prefer': 'count=exact' // Forzamos conteo de hardware síncrono en Postgres
+            }
+        });
+
+        const rangoCabecera = responseCount.headers.get('content-range') || "";
+        let activacionesActuales = 0;
+        
+        if (rangoCabecera.includes('/')) {
+            activacionesActuales = parseInt(rangoCabecera.split('/')[1]) || 0;
+        } else {
+            // Resguardo por si el API responde el JSON plano con el arreglo de filas
+            const dataCountBody = await responseCount.json();
+            if (Array.isArray(dataCountBody)) activacionesActuales = dataCountBody.length;
+        }
+
+        console.log(`📊 Cuota de Licencia: [${activacionesActuales} de ${maxEstaciones}] asientos ocupados.`);
+
+        // Candado Comercial: Si ya alcanzamos o superamos la cuota, portazo por volumen
+        if (activacionesActuales >= maxEstaciones) {
+            console.log(`❌ Bloqueo de Cuota: Serial ${lcLicencia} excedió su límite de ${maxEstaciones} estaciones.`);
+            return res.json({ activada: false, motivo: "CUOTA_EXCEDIDA", error: "Límite de activaciones alcanzado para esta licencia. Adquiera más asientos." });
+        }
+
+        // CÁLCULO DINÁMICO DE TU FECHA DE VENCIMIENTO
+        const aniosValidez = registroStock.validez !== undefined ? parseInt(registroStock.validez) : 1;
+        let fechaCalculada = new Date();
+        fechaCalculada.setFullYear(fechaCalculada.getFullYear() + aniosValidez);
+        const lcVencimiento = fechaCalculada.toISOString().split('T')[0];
+
+        // 2. PROCEDER CON LA ACTIVACIÓN EN TU MAESTRO DE ACTIVADAS (Añadimos un asiento)
+        const payloadActivacion = {
+            licencia: lcLicencia,
+            rifasociado: lcRif,
+            vencimiento: lcVencimiento,
+            activa: true,
+            bloqueada: false
+        };
+
+        const responseActi = await fetch(process.env.SUPABASE_ACTIVADAS, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payloadActivacion)
+        });
+
+        if (!responseActi.ok) {
+            const errTxt = await responseActi.text();
+            console.error("Supabase rechazó la inserción en activadas:", errTxt);
+            return res.json({ activada: false, error: "La base de datos bloqueó la activación por hardware." });
+        }
+
+        // 3. QUEMAR EL STOCK UNICAMENTE SI ACABAMOS DE LLENAR EL ULTIMO CUPO CONTRATADO
+        // Sumamos 1 al contador actual porque la inserción del payload fue exitosa
+        if ((activacionesActuales + 1) >= maxEstaciones) {
+            const idReal = registroStock.id !== undefined ? registroStock.id : registroStock.ID;
+            const urlUpdateStock = process.env.SUPABASE_DISPONIBLES + `?id=eq.${idReal}`;
+            
+            await fetch(urlUpdateStock, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': "Bearer " + SUPABASE_KEY,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ status: true }) // Agotada para siempre en stock
+            });
+            console.log(`🔒 Licencia [${lcLicencia}] agotó todos sus cupos contratados.`);
+        }
+
+        console.log(`🚀 ¡ÉXITO MULTI-ESTACIÓN! Activación registrada. Asientos: [${activacionesActuales + 1}/${maxEstaciones}]`);
+        return res.status(200).json({ activada: true, mensaje: `Licencia activada de forma exitosa. Asiento asignado.` });
+
+    } catch (error) {
+        console.error("Fallo crítico controlado en protocolo de activación:", error);
+        return res.status(200).json({ activada: false, error: "El servidor contuvo un error en la ráfaga: " + error.message });
+    }
+});
 
 // =====================================================================
 // NUEVO ENDPOINT: EMBUDO DE VALIDACIÓN DIARIA CAPTCHASOLVER (POST)
