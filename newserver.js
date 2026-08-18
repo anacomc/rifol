@@ -1,6 +1,7 @@
 const express = require('express');
 const app = express();
 app.use(express.json());
+const crypto = require('crypto');
 
 // API KEY ANON LARGA DE SUPABASE
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -983,7 +984,7 @@ app.post('/validar-acceso-diarioA', async (req, res) => {
     }
 });
             
-const crypto = require('crypto');
+
 
 // =====================================================================
 // ENDPOINT CORREGIDO: GENERACIÓN ONLINE DE LICENCIA CRYPTO XML-COMPATIBLE (POST)
@@ -1036,18 +1037,25 @@ app.post('/generar-licencia-online', (req, res) => {
             });
         }
 
-        // Convertimos los componentes Base64 del XML de Microsoft a JWK nativo de OpenSSL
+        // =====================================================================
+        // CORREGIDO: TRADUCTOR DE LLAVE XML DE MICROSOFT A JWK (BASE64URL STRINGS)
+        // =====================================================================
+        // Convertimos los componentes Base64 del XML de .NET a base64url strings para JWK
+        const toBase64Url = (base64Str) => {
+            return Buffer.from(base64Str, 'base64').toString('base64url');
+        };
+
         const rsaPrivateKeyPem = crypto.createPrivateKey({
             key: {
                 kty: 'RSA',
-                n: Buffer.from(modulus, 'base64'),
-                e: Buffer.from(exponent, 'base64'),
-                d: Buffer.from(d, 'base64'),
-                p: Buffer.from(p, 'base64'),
-                q: Buffer.from(q, 'base64'),
-                dp: Buffer.from(dp, 'base64'),
-                dq: Buffer.from(dq, 'base64'),
-                qi: Buffer.from(qi, 'base64')
+                n: toBase64Url(modulus),
+                e: toBase64Url(exponent),
+                d: toBase64Url(d),
+                p: toBase64Url(p),
+                q: toBase64Url(q),
+                dp: toBase64Url(dp),
+                dq: toBase64Url(dq),
+                qi: toBase64Url(qi)
             },
             format: 'jwk'
         });
@@ -1070,6 +1078,7 @@ app.post('/generar-licencia-online', (req, res) => {
             exito: true,
             licenseFileContent: licenseFileContent
         });
+
 
     } catch (error) {
         console.error("❌ Fallo crítico controlado en el motor criptográfico de Render:", error);
