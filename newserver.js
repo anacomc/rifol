@@ -903,30 +903,33 @@ app.post('/validar-acceso-diarioA', async (req, res) => {
         const lcNombrePc = nombre_pc.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
         
         // Armamos la misma ancla exacta para interrogar a Supabase
-        const lcRifCombinado = `${lcRifBase}-${lcNombrePc}`;
+        const lcRifCombinado = lcRifBase + "-" + lcNombrePc;
         
-        console.log(`📡 Solicitud de acceso diario -> Licencia: ${lcLicencia}, Estación: ${lcRifCombinado}...`);
+        console.log("📡 Solicitud de acceso diario -> Licencia: " + lcLicencia + ", Estación: " + lcRifCombinado + "...");
 
-        // PASO 1: VERIFICAR EN STOCK DE DISPONIBLES
-        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + `?licencia=eq.${encodeURIComponent(lcLicencia)}`;
+        // PASO 1: VERIFICAR EXCLUSIVAMENTE QUE EL SERIAL EXISTA EN TU STOCK
+        const urlCheckStock = process.env.SUPABASE_DISPONIBLES + "?licencia=eq." + encodeURIComponent(lcLicencia);
         const responseStock = await fetch(urlCheckStock, {
             method: 'GET',
             headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json' }
         });
         const dataStock = await responseStock.json();
 
+        // Candado A: El serial no existe físicamente en tu inventario maestro
         if (!dataStock || dataStock.length === 0 || !Array.isArray(dataStock)) {
+            console.log("⛔ Acceso Denegado: Licencia " + lcLicencia + " no existe en el inventario.");
             return res.json({ acceso: false, motivo: "INEXISTENTE", error: "Licencia no válida o no ha sido dada de alta." });
         }
 
+        // =====================================================================
+        // REMACHE MAESTRO: ¡PULVERIZADA LA LÍNEA DEL STATUS VIEJO!
+        // El stock solo valida existencia. El control real lo hace el Paso 2 en las activadas.
+        // =====================================================================
         const registroStock = dataStock[0];
-        if (registroStock.status !== true) {
-            return res.json({ acceso: false, motivo: "NO_ASIGNADA", error: "Esta licencia no se encuentra activada ni asignada en el sistema." });
-        }
 
         // PASO 2: VERIFICAR EN MAESTRO_LICENCIAS_ACTIVADAS (CANDADO ESTRICTO DE ESTACIÓN)
         // Filtramos por la Licencia AND la cadena combinada exacta (RIF-NombrePC)
-        const urlCheckActivadas = process.env.SUPABASE_ACTIVADAS + `?and=(licencia.eq.${encodeURIComponent(lcLicencia)},rifasociado.eq.${encodeURIComponent(lcRifCombinado)})`;
+        const urlCheckActivadas = process.env.SUPABASE_ACTIVADAS + "?and=(licencia.eq." + encodeURIComponent(lcLicencia) + ",rifasociado.eq." + encodeURIComponent(lcRifCombinado) + ")";
         const responseActivadas = await fetch(urlCheckActivadas, {
             method: 'GET',
             headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json' }
@@ -935,21 +938,24 @@ app.post('/validar-acceso-diarioA', async (req, res) => {
 
         // ¡EL PORTAZO A LA SEXTA MÁQUINA! Si la PC actual no está registrada para esa licencia
         if (!dataActivadas || dataActivadas.length === 0 || !Array.isArray(dataActivadas)) {
-            console.log(`⛔ Acceso Denegado: Estación [${lcRifCombinado}] no autorizada para esta licencia.`);
+            console.log("⛔ Acceso Denegado: Estación [" + lcRifCombinado + "] no autorizada para esta licencia.");
             return res.json({ acceso: false, motivo: "RIF_INCORRECTO", error: "Esta computadora no está registrada en el sistema para usar esta licencia." });
         }
 
+        // Extraemos el primer registro del arreglo de forma tradicional
         const registroCliente = dataActivadas[0];
 
-        // Candado C: Estatus administrativo
+        // Candado C: Estatus administrativo (activa/bloqueada)
         if (registroCliente.activa !== true || registroCliente.bloqueada === true) {
+            console.log("⛔ Acceso Denegado: Estación [" + lcRifCombinado + "] se encuentra inactiva o bloqueada.");
             return res.json({ acceso: false, motivo: "SUSPENDIDA", error: "La licencia se encuentra inactiva o bloqueada por el administrador." });
         }
 
-        // Candado D: Vigencia cronológica
+        // Candado D: Vigencia cronológica (Comparación de fechas en la RAM)
         const hoy = new Date().toISOString().split('T')[0];
         if (registroCliente.vencimiento) {
             if (hoy > registroCliente.vencimiento) {
+                console.log("⛔ Acceso Denegado: Estación [" + lcRifCombinado + "] se encuentra vencida.");
                 return res.json({ acceso: false, motivo: "VENCIDA", error: "La licencia se encuentra vencida. Por favor, renueve su suscripción." });
             }
         }
@@ -958,22 +964,24 @@ app.post('/validar-acceso-diarioA', async (req, res) => {
         const ipCliente = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "0.0.0.0";
         const payloadAcceso = {
             licencia: lcLicencia,
-            rifasociado: lcRifCombinado, // Estampamos RIF-NombrePC en el historial
+            rifasociado: lcRifCombinado, // Estampamos RIF-NombrePC en el historial de accesos
             ipaddress: ipCliente
         };
 
         await fetch(process.env.SUPABASE_ACCESOS, {
             method: 'POST',
             headers: { 'apikey': SUPABASE_KEY, 'Authorization': "Bearer " + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-            body: JSON.stringify(payloadAcceso)});
-            console.log("🚀 ¡LUZ VERDE! Acceso concedido a Estación: " + lcRifCombinado);
-            return 
-         res.status(200).json({ acceso: true, mensaje: "Validación exitosa. Licencia autorizada." });
-         } 
-         catch (error) {
-            return res.status(200).json({ acceso: false, error: "Error en protocolo de validación: " + error.message });
-         }
-      });
+            body: JSON.stringify(payloadAcceso)
+        });
+
+        console.log("🚀 ¡LUZ VERDE! Acceso concedido a Estación: " + lcRifCombinado);
+        return res.status(200).json({ acceso: true, mensaje: "Validación exitosa. Licencia autorizada." });
+
+    } catch (error) {
+        console.error("❌ Fallo crítico en protocolo de validación diaria:", error);
+        return res.status(200).json({ acceso: false, error: "Error en protocolo de validación: " + error.message });
+    }
+});
             
 
             
