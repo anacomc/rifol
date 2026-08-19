@@ -1114,7 +1114,7 @@ app.post('/generar-licencia-onlineC', async (req, res) => {
 // =====================================================================
 // DEFINITIVO AUTOMATIZADO: GENERACIÓN ONLINE DE LICENCIA CON INSERCIÓN DE ASIENTO
 // =====================================================================
-app.post('/generar-licencia-onlineC', async (req, res) => {
+app.post('/generar-licencia-online', async (req, res) => {
     // Recibimos los 4 parámetros tradicionales que envía tu FoxPro emisor
     const { lcRif, lcNombre, lcLic, lcFin } = req.body;
 
