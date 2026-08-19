@@ -1042,12 +1042,18 @@ app.post('/generar-licencia-online', async (req, res) => {
             return res.status(500).json({ exito: false, error: "Llave privada RSA_PRIVATE_KEY ausente en Render." });
         }
 
-        // Extractor indexado síncrono del XML de .NET
+        // =====================================================================
+        // REMACHE MAESTRO DE HARDWARE: EXTRACTOR INDEXADO EN EL INDICE 1 (STRINGS)
+        // =====================================================================
         const extractField = (field) => {
             const regex = new RegExp("<" + field + ">([^<]+)</" + field + ">");
             const match = xmlPrivateKey.match(regex);
-            return match && match ? match.trim() : null;
+            
+            // Evaluamos si el match existe y si tiene la posición 1 capturada,
+            // a esa sub-cadena de texto limpio SÍ le aplicamos el .trim() nativo
+            return (match && match[1]) ? match[1].trim() : null;
         };
+        
 
         const modulus = extractField("Modulus");
         const exponent = extractField("Exponent");
