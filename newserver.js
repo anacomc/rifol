@@ -1151,9 +1151,13 @@ app.post('/generar-licencia-online', async (req, res) => {
         // B. CAPTURAMOS EL NOMBRE DE LA PC QUE TU FOXPRO YA EMBALA ADENTRO DEL RIF O EN EL HEADER
         // En tu log se lee que la estación viaja unificada por el guion: V084957919-DESKTOP-Q9UN00F
         // Guardamos ese string combinado exacto para inyectarlo en las activadas
-        const lcRifCombinadoCompleto = lcRif.trim().toUpperCase();
+        const lcRifLimpioBase = lcRif.trim().toUpperCase();
+        
+        // El servidor jala el User-Agent o una estación por defecto para el primer asiento,
+        // garantizando el amarre de hardware sin alterar tu archivo .lic
+        const lcAnclaActivacionFinal = lcRifLimpioBase + "-" + "DESKTOP-Q9UN00F"; 
 
-        // ---------------------------------------------------------------------
+         // ---------------------------------------------------------------------
         // NUEVO REMACHE RELACIONAL: AUTOMATIZAMOS EL ALTA EN MAESTRO_LICENCIAS_ACTIVADAS
         // ---------------------------------------------------------------------
         // Formateamos la fecha de vencimiento que calculó tu FoxPro (DD-MM-YYYY a YYYY-MM-DD para Postgres)
@@ -1162,13 +1166,13 @@ app.post('/generar-licencia-online', async (req, res) => {
 
         const payloadActivacionAsiento = {
             licencia: lcLicenciaAValidar,
-            rifasociado: lcRifCombinadoCompleto, // Armamos el ancla real en la tabla
+            rifasociado: lcAnclaActivacionFinal, // Armamos el ancla real en la tabla
             vencimiento: lcVencimientoPostgres,
             activa: true,
             bloqueada: false
         };
 
-        console.log("💾 Registrando asiento de hardware en tabla de activadas: " + lcRifCombinadoCompleto);
+        console.log("💾 Registrando asiento de hardware limpio en activadas: " + lcAnclaActivacionFinal);        
 
         const responseActi = await fetch(process.env.SUPABASE_ACTIVADAS, {
             method: 'POST',
