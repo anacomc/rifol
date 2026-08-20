@@ -2,22 +2,23 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Run at midnight (0 0 * *) on Sunday (0) and Friday(5)
-    # - cron: '0 0 * * 0,5'
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *' # Despierta a la medianoche todos los días de forma automática
+  workflow_dispatch: # Activa el gran botón gris para que pruebes en caliente manualmente
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Instalar Cliente Postgres Nativos de Ráfaga
+      - name: Instalar Herramientas Nativas de Postgres (15 segundos)
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Ejecutar Consulta SQL Directa al Motor Postgres (Resetea la Pausa)
+      - name: Disparar Consulta SQL Directa al Corazón de Postgres (Resetea la Pausa)
+        # Inyectamos las credenciales blindadas directamente en las variables de entorno de Linux
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          # Interrogamos al puerto 5432 con psql directo enviando un query dummy a tus activadas
-          PGPASSWORD="${{ secrets.SUPABASE_DB_PASSWORD }}" psql \
+          # Ejecutamos el psql nativo apuntando al puerto 5432 con los secretos criptográficos
+          psql \
           -h "${{ secrets.SUPABASE_DB_HOST }}" \
           -p 5432 \
           -U "postgres" \
