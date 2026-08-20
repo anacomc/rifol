@@ -745,17 +745,20 @@ app.post('/generar-licencia-online', async (req, res) => {
     }
 });
 // =====================================================================
-// ENDPOINT SUPREMO: HACK DE DESPERTAR TOLERANTE A GET Y POST (HÍBRIDO)
+// ENDPOINT AUXILIAR: HACK DE DESPERTAR CON VARIABLE INDEPENDIENTE (ALL)
 // =====================================================================
 app.all('/despertar-bunker-online', async (req, res) => {
-    // app.all permite recibir ráfagas tanto GET (Navegador) como POST (Cron-Job)
-    console.log("📡 Ráfaga Keep-Alive recibida [" + req.method + "]. Forzando escritura en Postgres...");
+    console.log("📡 Ráfaga Keep-Alive recibida [" + req.method + "]. Despertando clúster rifonline...");
     
     try {
-        // Reemplazamos la variable de entorno de las activadas para apuntar a la mini-tabla de control
-        const urlTablaKeep = process.env.SUPABASE_ACTIVADAS.replace('maestro_licencias_activadas', 'keep_alive');
+        // Jalamos directamente tu nueva variable de entorno limpia de Render
+        const urlTablaKeep = process.env.SUPABASE_KEEPALIVE;
 
-        // 1. FORZAMOS UNA INSERCIÓN REAL EN EL DISCO DUREÑO DE SUPABASE
+        if (!urlTablaKeep) {
+            throw new Error("Configuración incompleta: Variable SUPABASE_KEEPALIVE ausente en Render.");
+        }
+
+        // 1. FORZAMOS UNA INSERCIÓN REAL EN EL DISCO (Reinicia el conteo de pausa a cero)
         const responseInsert = await fetch(urlTablaKeep, {
             method: 'POST',
             headers: {
@@ -764,14 +767,16 @@ app.all('/despertar-bunker-online', async (req, res) => {
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal'
             },
-            body: JSON.stringify({ }) // El motor autogenera el ID de forma síncrona
+            body: JSON.stringify({ }) // Inserta una fila vacía con ID y Fecha autogenerados
         });
 
         if (!responseInsert.ok) {
-            throw new Error("Supabase rechazó la inserción de control.");
+            const txtErr = await responseInsert.text();
+            console.error("Supabase rechazó el insert. Detalle:", txtErr);
+            throw new Error("El clúster de rifonline rechazó la inserción de control.");
         }
 
-        // 2. LIMPIEZA AUTOMÁTICA EN SEGUNDOS: Vaciamos la tabla para mantenerla en cero bytes
+        // 2. AUTO-LIMPIEZA: Vaciamos la tabla de inmediato para dejarla en cero bytes
         await fetch(urlTablaKeep + "?id=gt.0", {
             method: 'DELETE',
             headers: {
@@ -780,17 +785,17 @@ app.all('/despertar-bunker-online', async (req, res) => {
             }
         });
 
-        console.log("🔥 Postgres operó internamente en disco con éxito. Reloj de inactividad reseteado.");
+        console.log("🔥 Motor PostgreSQL de rifonline operó con éxito. Reloj de inactividad reseteado.");
         
-        // Respondemos con texto HTML limpio para que lo veas nítido en el monitor
         res.setHeader('Content-Type', 'text/html');
-        return res.status(200).send("<h3>🏆 ¡Búnker Comercial Despierto con Éxito!</h3><p>El motor PostgreSQL registró la ráfaga de escritura de forma legítima en verde líquido.</p>");
+        return res.status(200).send("<h3>🏆 ¡Proyecto RIFONLINE Despierto!</h3><p>El motor PostgreSQL registró la ráfaga de escritura de forma legítima en tu tabla keep_alive.</p>");
 
     } catch (error) {
         console.error("❌ Alerta en el keep-alive por API:", error.message);
-        return res.status(500).send("Error de soplete en la nube: " + error.message);
+        return res.status(500).send("Alerta de control: " + error.message);
     }
 });
+
 
 
 //**************************************************************************************************************************************
