@@ -745,15 +745,17 @@ app.post('/generar-licencia-online', async (req, res) => {
     }
 });
 // =====================================================================
-// ENDPOINT FAIL-SAFE: HACK DE DESPERTAR PARA POSTGRESQL (POST)
+// ENDPOINT SUPREMO: HACK DE DESPERTAR TOLERANTE A GET Y POST (HÍBRIDO)
 // =====================================================================
-app.post('/despertar-bunker-online', async (req, res) => {
-    console.log("📡 Ráfaga Keep-Alive recibida de Cron-Job. Forzando escritura en Postgres...");
+app.all('/despertar-bunker-online', async (req, res) => {
+    // app.all permite recibir ráfagas tanto GET (Navegador) como POST (Cron-Job)
+    console.log("📡 Ráfaga Keep-Alive recibida [" + req.method + "]. Forzando escritura en Postgres...");
     
     try {
-        const urlTablaKeep = `${process.env.SUPABASE_ACTIVADAS.replace('maestro_licencias_activadas', 'keep_alive')}`;
+        // Reemplazamos la variable de entorno de las activadas para apuntar a la mini-tabla de control
+        const urlTablaKeep = process.env.SUPABASE_ACTIVADAS.replace('maestro_licencias_activadas', 'keep_alive');
 
-        // 1. FORZAMOS UNA INSERCIÓN (Esto despierta el hardware y resetea la pausa)
+        // 1. FORZAMOS UNA INSERCIÓN REAL EN EL DISCO DUREÑO DE SUPABASE
         const responseInsert = await fetch(urlTablaKeep, {
             method: 'POST',
             headers: {
@@ -762,15 +764,15 @@ app.post('/despertar-bunker-online', async (req, res) => {
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal'
             },
-            body: JSON.stringify({ }) // Payload vacío, Postgres autogenera el ID y la fecha
+            body: JSON.stringify({ }) // El motor autogenera el ID de forma síncrona
         });
 
         if (!responseInsert.ok) {
             throw new Error("Supabase rechazó la inserción de control.");
         }
 
-        // 2. LIMPIEZA AUTOMÁTICA: Borramos los registros viejos para mantener la tabla en cero bytes
-        await fetch(`${urlTablaKeep}?id=gt.0`, {
+        // 2. LIMPIEZA AUTOMÁTICA EN SEGUNDOS: Vaciamos la tabla para mantenerla en cero bytes
+        await fetch(urlTablaKeep + "?id=gt.0", {
             method: 'DELETE',
             headers: {
                 'apikey': SUPABASE_KEY,
@@ -779,13 +781,17 @@ app.post('/despertar-bunker-online', async (req, res) => {
         });
 
         console.log("🔥 Postgres operó internamente en disco con éxito. Reloj de inactividad reseteado.");
-        return res.status(200).send("OK: Búnker comercial despierto y en verde líquido.");
+        
+        // Respondemos con texto HTML limpio para que lo veas nítido en el monitor
+        res.setHeader('Content-Type', 'text/html');
+        return res.status(200).send("<h3>🏆 ¡Búnker Comercial Despierto con Éxito!</h3><p>El motor PostgreSQL registró la ráfaga de escritura de forma legítima en verde líquido.</p>");
 
     } catch (error) {
         console.error("❌ Alerta en el keep-alive por API:", error.message);
-        return res.status(500).send("Error de soplete: " + error.message);
+        return res.status(500).send("Error de soplete en la nube: " + error.message);
     }
 });
+
 
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
