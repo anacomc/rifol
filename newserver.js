@@ -744,6 +744,48 @@ app.post('/generar-licencia-online', async (req, res) => {
         return res.status(500).json({ exito: false, error: "Error en el servidor: " + error.message });
     }
 });
+// =====================================================================
+// ENDPOINT FAIL-SAFE: HACK DE DESPERTAR PARA POSTGRESQL (POST)
+// =====================================================================
+app.post('/despertar-bunker-online', async (req, res) => {
+    console.log("📡 Ráfaga Keep-Alive recibida de Cron-Job. Forzando escritura en Postgres...");
+    
+    try {
+        const urlTablaKeep = `${process.env.SUPABASE_ACTIVADAS.replace('maestro_licencias_activadas', 'keep_alive')}`;
+
+        // 1. FORZAMOS UNA INSERCIÓN (Esto despierta el hardware y resetea la pausa)
+        const responseInsert = await fetch(urlTablaKeep, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ }) // Payload vacío, Postgres autogenera el ID y la fecha
+        });
+
+        if (!responseInsert.ok) {
+            throw new Error("Supabase rechazó la inserción de control.");
+        }
+
+        // 2. LIMPIEZA AUTOMÁTICA: Borramos los registros viejos para mantener la tabla en cero bytes
+        await fetch(`${urlTablaKeep}?id=gt.0`, {
+            method: 'DELETE',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY
+            }
+        });
+
+        console.log("🔥 Postgres operó internamente en disco con éxito. Reloj de inactividad reseteado.");
+        return res.status(200).send("OK: Búnker comercial despierto y en verde líquido.");
+
+    } catch (error) {
+        console.error("❌ Alerta en el keep-alive por API:", error.message);
+        return res.status(500).send("Error de soplete: " + error.message);
+    }
+});
 
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
