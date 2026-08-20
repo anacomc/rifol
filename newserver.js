@@ -626,7 +626,7 @@ app.post('/validar-acceso-diario', async (req, res) => {
 // =====================================================================
 // DEFINITIVO: GENERACIÓN ONLINE DE LICENCIA CON AUDITORÍA DE STOCK (POST)
 // =====================================================================
-app.post('/generar-licencia-onlineC', async (req, res) => {
+app.post('/generar-licencia-online', async (req, res) => {
     const { lcRif, lcNombre, lcLic, lcFin } = req.body;
 
     if (!lcRif || !lcNombre || !lcLic || !lcFin) {
@@ -751,7 +751,7 @@ app.post('/generar-licencia-onlineC', async (req, res) => {
 // =====================================================================
 // DEFINITIVO AUTOMATIZADO: GENERACIÓN ONLINE DE LICENCIA CON INSERCIÓN DE ASIENTO
 // =====================================================================
-app.post('/generar-licencia-online', async (req, res) => {
+app.post('/generar-licencia-onlineX', async (req, res) => {
     // Recibimos los 4 parámetros tradicionales que envía tu FoxPro emisor
     const { lcRif, lcNombre, lcLic, lcFin } = req.body;
 
