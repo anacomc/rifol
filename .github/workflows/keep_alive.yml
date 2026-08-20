@@ -2,8 +2,8 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Corre de forma perpetua todas las noches a la medianoche
-  workflow_dispatch: # Activa el botón gris para que lo forces manualmente
+    - cron: '0 0 * * *' # Corre todas las noches de forma automatizada a la medianoche
+  workflow_dispatch: # Activa el gran botón gris para que pruebes manualmente en caliente
 
 jobs:
   ping:
@@ -16,7 +16,8 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          # REMACHE COMPATIBLE: Usamos el puerto 6543 del Pooler IPv4 transaccional
+          # Interrogamos al puerto 6543 usando la dirección IPv4 del pooler.
+          # Usamos tu ID de proyecto unico para que Supabase sepa a que disco ir.
           psql \
           -h "${{ secrets.SUPABASE_DB_HOST }}" \
           -p 6543 \
