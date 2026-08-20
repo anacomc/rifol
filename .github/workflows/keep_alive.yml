@@ -2,25 +2,16 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Corre de forma perpetua todas las noches a la medianoche
-  workflow_dispatch: # Activa el botón gris para probar manualmente en caliente
+    # Run at midnight (0 0 * *) on Sunday (0) and Friday(5)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Instalar Herramientas Nativas de Postgres (15 segundos)
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Disparar Consulta SQL Directa al Pooler IPv4 (Resetea la Pausa)
-        env:
-          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      - name: Ping Supabase Database
         run: |
-          # CONEXIÓN BLINDADA: Atacamos el puerto 6543 del Pooler IPv4
-          # Inyectamos tu nuevo ID unificado de proyecto
-          psql \
-          -h "${{ secrets.SUPABASE_DB_HOST }}" \
-          -p 6543 \
-          -U "postgres.rfjeldbecbacfcgrkapi" \
-          -d "postgres" \
-          -c "SELECT id FROM public.maestro_licencias_activadas LIMIT 1;"
+          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/keep_alive?select=id&limit=1" \
+          -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}"
