@@ -796,6 +796,54 @@ app.all('/despertar-bunker-online', async (req, res) => {
     }
 });
 
+// =====================================================================
+// NUEVO: ENDPOINT DE BÚSQUEDA SEGURA MEDIANTE PAYLOAD JSON (POST)
+// =====================================================================
+app.post('/api/clientes/buscar', async (req, res) => {
+    // Extraemos la clave oculta que viaja adentro del cuerpo del JSON de FoxPro
+    const { clave } = req.body;
+
+    if (!clave) {
+        return res.status(400).json({ encontrado: false, error: "La clave en el JSON payload es requerida." });
+    }
+
+    try {
+        // Tu tabla real de Supabase configurada dinámicamente
+        const urlTablaClientes = "https://supabase.co";
+        
+        // El encodeURIComponent ocurre de forma segura en la RAM de Node.js antes de tocar a Supabase
+        const urlFetch = urlTablaClientes + "?cedula=eq." + encodeURIComponent(clave.trim().toUpperCase());
+        
+        const response = await fetch(urlFetch, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': "Bearer " + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data && data.length > 0 && Array.isArray(data)) {
+            const registro = data[0]; // Aislamos el primer objeto encontrado
+            console.log("🎯 Registro localizado en Supabase para la clave: " + clave);
+            return res.status(200).json({
+                encontrado: true,
+                campo1: registro.nombre || "",
+                campo2: registro.telefono || "",
+                campo3: registro.direccion || ""
+            });
+        } else {
+            console.log("ℹ️ Clave libre en Supabase (No existe): " + clave);
+            return res.status(200).json({ encontrado: false });
+        }
+
+    } catch (error) {
+        console.error("❌ Alerta en la compuerta de búsqueda CRUD:", error.message);
+        return res.status(500).json({ encontrado: false, error: error.message });
+    }
+});
 
 
 //**************************************************************************************************************************************
