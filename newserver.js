@@ -10,6 +10,8 @@ const SUPABASE_HIST = process.env.SUPABASE_HISTORIAL;
 const SUPABASE_MAST = process.env.SUPABASE_MASTER;
 const SUPABASE_DISP = process.env.SUPABASE_DISPONIBLES;
 const SUPABASE_ACTI = process.env.SUPABASE_ACTIVADAS;  
+const SUPABASE_CLIE = process.env.SUPABASE_CLIENTES;
+
 
 
 //*********************************************************************************************************
@@ -797,7 +799,7 @@ app.all('/despertar-bunker-online', async (req, res) => {
 });
 // *--*
 // =====================================================================
-// ENDPOINT PERFECTO: BÚSQUEDA SEGURA EN TABLA CLIENTES (POST)
+// ENDPOINT CORREGIDO: BÚSQUEDA EXHAUSTIVA CON LIMPIEZA DE ESPACIOS (POST)
 // =====================================================================
 app.post('/api/clientes/buscar', async (req, res) => {
     const { clave } = req.body;
@@ -807,9 +809,9 @@ app.post('/api/clientes/buscar', async (req, res) => {
     }
 
     try {
-        // Apuntamos a tu tabla clientes real filtrando estrictamente por la columna cedula
-        const urlTablaClientes = process.env.SUPABASE_CLIENTES;
-        const urlFetch = urlTablaClientes + encodeURIComponent(clave.trim());
+        // Limpiamos los espacios invisibles a los lados (trim) para asegurar coincidencia exacta de texto
+        const lcCedulaLimpia = clave.toString().trim();
+        const urlFetch = SUPABASE_CLIE + encodeURIComponent(lcCedulaLimpia);
         
         const response = await fetch(urlFetch, {
             method: 'GET',
@@ -822,9 +824,10 @@ app.post('/api/clientes/buscar', async (req, res) => {
 
         const data = await response.json();
 
+        // Validamos que el arreglo contenga información real
         if (data && data.length > 0 && Array.isArray(data)) {
-            const registro = data[0]; // Aislamos la fila cero encontrada
-            console.log("🎯 registro localizado en la tabla clientes para cedula: " + clave);
+            const registro = data[0]; // Extraemos la fila cero de forma estricta
+            console.log("🎯 registro localizado en la tabla clientes para la cedula: " + lcCedulaLimpia);
             return res.status(200).json({
                 encontrado: true,
                 campo1: registro.nombre || "",
@@ -832,7 +835,7 @@ app.post('/api/clientes/buscar', async (req, res) => {
                 campo3: registro.direccion || ""
             });
         } else {
-            console.log("ℹ️ cedula libre (no existe en tabla clientes): " + clave);
+            console.log("ℹ️ cedula libre (no existe en tabla clientes): " + lcCedulaLimpia);
             return res.status(200).json({ encontrado: false });
         }
 
@@ -843,10 +846,9 @@ app.post('/api/clientes/buscar', async (req, res) => {
 });
 
 // =====================================================================
-// ENDPOINT PERFECTO: GUARDADO CON FILTRO DE CONFLICTO DE CÉDULA (POST)
+// ENDPOINT PERFECTO: GUARDADO CON CABECERA UPSERT BLINDADA DE POSTGRES (POST)
 // =====================================================================
 app.post('/api/clientes/guardar', async (req, res) => {
-    // Recibimos los 4 parámetros exactos desde el JSON de FoxPro
     const { clave, campo1, campo2, campo3 } = req.body;
 
     if (!clave) {
@@ -854,16 +856,14 @@ app.post('/api/clientes/guardar', async (req, res) => {
     }
 
     try {
-        // Tu URL apunta estrictamente a tu nueva tabla 'clientes' en minúsculas
-        // Le inyectamos el parámetro on_conflict=cedula para avisarle a Postgres cuál es el candado único
-        const urlTablaClientes = process.env.SUPABASE_CLIENTES;
+        // Apuntamos a tu tabla clientes real inyectando el conflicto por URL
+        const urlTablaClientes = SUPABASE_CLIE;
 
-        // Mapeo idéntico a las columnas físicas de tu base de datos
         const payloadSupabase = {
-            cedula: clave.trim(), 
-            nombre: campo1.trim(),
-            telefono: campo2.trim(),
-            direccion: campo3.trim()
+            cedula: clave.toString().trim(), 
+            nombre: campo1.toString().trim(),
+            telefono: campo2.toString().trim(),
+            direccion: campo3.toString().trim()
         };
 
         console.log("💾 ejecutando upsert indexado para cedula: " + clave);
@@ -874,7 +874,10 @@ app.post('/api/clientes/guardar', async (req, res) => {
                 'apikey': SUPABASE_KEY,
                 'Authorization': "Bearer " + SUPABASE_KEY,
                 'Content-Type': 'application/json',
-                'Prefer': 'resolution=merge-duplicates,return=minimal' // Modifica si existe, inserta si es nuevo
+                // =============================================================
+                // REMACHE MAESTRO: ESTAS DOS CABECERAS EXIGE SUPABASE PARA LA FUSIÓN
+                // =============================================================
+                'Prefer': 'action=upsert,resolution=merge-duplicates' 
             },
             body: JSON.stringify(payloadSupabase)
         });
@@ -882,10 +885,10 @@ app.post('/api/clientes/guardar', async (req, res) => {
         if (!response.ok) {
             const txtErr = await response.text();
             console.error("supabase rechazo la escritura:", txtErr);
-            return res.status(400).json({ exito: false, error: "la base de datos bloqueo la transaccion." });
+            return res.status(400).json({ exito: false, error: "la base de datos bloqueo la transaccion por conflicto." });
         }
 
-        console.log("✅ exito real. registro asentado en la tabla clientes.");
+        console.log("✅ exito real. registro asentado en la tabla clientes de forma síncrona.");
         return res.status(200).json({ exito: true });
 
     } catch (error) {
@@ -893,7 +896,6 @@ app.post('/api/clientes/guardar', async (req, res) => {
         return res.status(500).json({ exito: false, error: error.message });
     }
 });
-
 
 
 //**************************************************************************************************************************************
