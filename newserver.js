@@ -849,5 +849,5 @@ app.post('/api/clientes/buscar', async (req, res) => {
 //**************************************************************************************************************************************
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`rifol - newserver.js 4. - Servidor corriendo en el puerto ${PORT}`);
+    console.log(`rifol - newserver.js 5. - Servidor corriendo en el puerto ${PORT}`);
 });
