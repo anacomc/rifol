@@ -795,53 +795,59 @@ app.all('/despertar-bunker-online', async (req, res) => {
         return res.status(500).send("Alerta de control: " + error.message);
     }
 });
-
+// *--*
 // =====================================================================
-// NUEVO: ENDPOINT DE BÚSQUEDA SEGURA MEDIANTE PAYLOAD JSON (POST)
+// DEFINITIVO: ENDPOINT MAESTRO DE ACCIÓN DIRECTA (UPSERT)
 // =====================================================================
-app.post('/api/clientes/buscar', async (req, res) => {
-    // Extraemos la clave oculta que viaja adentro del cuerpo del JSON de FoxPro
-    const { clave } = req.body;
+app.post('/api/clientes/guardar', async (req, res) => {
+    // Recibimos la ráfaga desde el botón Aceptar de FoxPro
+    const { clave, campo1, campo2, campo3 } = req.body;
 
     if (!clave) {
-        return res.status(400).json({ encontrado: false, error: "La clave en el JSON payload es requerida." });
+        return res.status(400).json({ exito: false, error: "La clave principal es requerida para operar." });
     }
 
     try {
-        // Tu tabla real de Supabase configurada dinámicamente
+        // Tu tabla real adentro de tu proyecto rifonline
         const urlTablaClientes = process.env.SUPABASE_CLIENTES;
         
-        // El encodeURIComponent ocurre de forma segura en la RAM de Node.js antes de tocar a Supabase
-        const urlFetch = urlTablaClientes + "?cedula=eq." + encodeURIComponent(clave.trim().toUpperCase());
-        
-        const response = await fetch(urlFetch, {
-            method: 'GET',
+        // =====================================================================
+        // 🚨 REVISIÓN DE HARDWARE OBLIGATORIA:
+        // Asegúrate de cambiar 'cedula', 'nombre', 'telefono' y 'direccion'
+        // por los nombres EXACTOS de tus columnas reales en Supabase.
+        // =====================================================================
+        const payloadSupabase = {
+            cedula: clave.trim().toUpperCase(), 
+            nombre: campo1.trim(),
+            telefono: campo2.trim(),
+            direccion: campo3.trim()
+        };
+
+        console.log("💾 Ejecutando operación UPSERT en Supabase para clave: " + clave);
+
+        const response = await fetch(urlTablaClientes, {
+            method: 'POST', // Supabase exige POST para ejecutar un UPSERT por API REST
             headers: {
                 'apikey': SUPABASE_KEY,
                 'Authorization': "Bearer " + SUPABASE_KEY,
-                'Content-Type': 'application/json'
-            }
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates,return=minimal' // <-- EL TRUCO MAGICO: Une duplicados (Modifica si existe, inserta si es nuevo)
+            },
+            body: JSON.stringify(payloadSupabase)
         });
 
-        const data = await response.json();
-
-        if (data && data.length > 0 && Array.isArray(data)) {
-            const registro = data[0]; // Aislamos el primer objeto encontrado
-            console.log("🎯 Registro localizado en Supabase para la clave: " + clave);
-            return res.status(200).json({
-                encontrado: true,
-                campo1: registro.nombre || "",
-                campo2: registro.telefono || "",
-                campo3: registro.direccion || ""
-            });
-        } else {
-            console.log("ℹ️ Clave libre en Supabase (No existe): " + clave);
-            return res.status(200).json({ encontrado: false });
+        if (!response.ok) {
+            const txtErr = await response.text();
+            console.error("Supabase rechazó la escritura física:", txtErr);
+            return res.status(400).json({ exito: false, error: "La base de datos bloqueó la transacción." });
         }
 
+        console.log("✅ ¡Éxito absoluto! Disco duro actualizado legítimamente en Supabase.");
+        return res.status(200).json({ exito: true });
+
     } catch (error) {
-        console.error("❌ Alerta en la compuerta de búsqueda CRUD:", error.message);
-        return res.status(500).json({ encontrado: false, error: error.message });
+        console.error("❌ Fallo crítico en el soplete de guardado:", error.message);
+        return res.status(500).json({ exito: false, error: error.message });
     }
 });
 
