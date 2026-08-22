@@ -809,7 +809,7 @@ app.post('/api/clientes/buscar', async (req, res) => {
 
     try {
         // Tu tabla real de Supabase configurada dinámicamente
-        const urlTablaClientes = "https://supabase.co";
+        const urlTablaClientes = process.env.SUPABASE_CLIENTES;
         
         // El encodeURIComponent ocurre de forma segura en la RAM de Node.js antes de tocar a Supabase
         const urlFetch = urlTablaClientes + "?cedula=eq." + encodeURIComponent(clave.trim().toUpperCase());
